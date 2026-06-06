@@ -170,3 +170,20 @@ export interface CouncilDecisionRow {
   convened_at: string;
   created_at: string;
 }
+
+// ── Quality gate (migration 003) ─────────────────────────────
+
+export interface QualityGateResultRow {
+  id: string;
+  topic: string;
+  series_id: string | null;
+  video_id: string | null;
+  passed: boolean;
+  /** Composite score 0–100. Pass threshold is 60. */
+  score: number;
+  /** Full QualityDimensions object from lib/quality-gate/types.ts */
+  dimensions: Record<string, unknown>;
+  reasons: string[];
+  flags: string[];
+  evaluated_at: string;
+}
