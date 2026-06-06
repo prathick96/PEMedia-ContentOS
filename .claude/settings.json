@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(npx *)",
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git worktree *)",
+      "Bash(git push *)"
+    ],
+    "deny": [
+      "Read(./node_modules/**)",
+      "Read(./.next/**)",
+      "Read(./package-lock.json)",
+      "Read(./.DS_Store)",
+      "Read(./.env.local)",
+      "Read(./.env*.local)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/session-start.js 2>/dev/null || true",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  },
+  "plugins": [
+    {
+      "name": "superpowers",
+      "source": "local",
+      "path": ".claude/skills"
+    }
+  ]
+}

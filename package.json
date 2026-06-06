@@ -9,13 +9,27 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "16.2.7",
+    "@anthropic-ai/sdk": "^0.101.0",
+    "@auth/supabase-adapter": "^1.11.2",
+    "@supabase/supabase-js": "^2.107.0",
+    "@upstash/qstash": "^2.11.0",
+    "@upstash/redis": "^1.38.0",
+    "bullmq": "^5.78.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.17.0",
+    "next": "^16.2.7",
+    "next-auth": "^5.0.0-beta.31",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.42",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
