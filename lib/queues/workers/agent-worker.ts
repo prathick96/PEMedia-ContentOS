@@ -1,21 +1,21 @@
 /**
  * Agent worker — ARCHITECTURE NOTE (Council Brief 001 §2.5).
  *
- * Phase 0 wired BullMQ (lib/queues/index.ts) to `@upstash/redis`, which is a REST
- * client. BullMQ requires a raw TCP (ioredis) connection and CANNOT run on the
- * Upstash REST SDK. Two supported paths:
+ * STATUS: Path A (QStash) is now live and is the active queue layer.
  *
- *   A) RECOMMENDED for solo serverless (Vercel): drop the long-lived BullMQ worker
- *      and use `@upstash/qstash` (already a dependency) to schedule the daily CEO
- *      cron and fan out HTTP calls to the /api/agents/* routes. No always-on worker
- *      host required — fits Vercel's execution model.
+ * ── PATH A — ACTIVE (Vercel serverless) ─────────────────────────────────────
+ *   lib/queues/index.ts     → enqueueAgent() publishes via QStash Client
+ *   lib/queues/receiver.ts  → HMAC signature verification helper
+ *   app/api/queue/route.ts  → QStash receiver endpoint, dispatches to agents
  *
- *   B) If a persistent worker host is added later: keep BullMQ, but connect via
- *      ioredis to Upstash's TCP endpoint (rediss://...), NOT the REST URL. Only then
- *      does the worker below run.
+ *   No always-on worker process required. QStash delivers HTTP messages to
+ *   /api/queue with retries + exponential backoff. Fits Vercel's execution model.
  *
- * The skeleton below is path (B). It is intentionally NOT started anywhere yet —
- * it documents the contract a worker host would fulfil.
+ * ── PATH B — DOCUMENTED ONLY (future persistent worker host) ────────────────
+ *   If a persistent worker host (e.g. Railway, Fly.io) is added later, swap back
+ *   to BullMQ but connect via ioredis to Upstash's TCP endpoint (rediss://...),
+ *   NOT the REST URL that Phase 0 incorrectly used. The skeleton below is path B —
+ *   it is intentionally NOT started anywhere and exists only to document the contract.
  */
 import { Worker, type ConnectionOptions } from "bullmq";
 import type { BaseAgent } from "@/lib/agents/base";
