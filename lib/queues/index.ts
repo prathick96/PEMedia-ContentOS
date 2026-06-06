@@ -19,6 +19,7 @@
  */
 
 import { Client } from "@upstash/qstash";
+import type { TriggeredBy } from "@/lib/agents/base";
 
 let _client: Client | null = null;
 
@@ -42,9 +43,12 @@ export interface EnqueueResult {
 /**
  * Enqueue an agent job via QStash.
  *
- * @param agentType  one of: ceo | scout | creative | production | publisher | analytics
- * @param input      the payload passed to agent.run()
- * @param opts.delay milliseconds before delivery (converted to seconds for QStash)
+ * @param agentType        one of: ceo | scout | creative | production | publisher | analytics
+ * @param input            the payload passed to agent.run()
+ * @param opts.delay       milliseconds before delivery (converted to seconds for QStash)
+ * @param opts.triggeredBy provenance recorded on agent_jobs. Defaults to "ceo"
+ *                         because enqueueAgent is the CEO's fan-out path; the daily
+ *                         cron schedule sets "cron" directly in its own body.
  *
  * Note: BullMQ priority is not supported in QStash (HTTP-based). Jobs are delivered
  * in order with retries. Prioritisation happens at the CEO task-queue level.
@@ -52,13 +56,13 @@ export interface EnqueueResult {
 export async function enqueueAgent(
   agentType: string,
   input: Record<string, unknown>,
-  opts?: { delay?: number }
+  opts?: { delay?: number; triggeredBy?: TriggeredBy }
 ): Promise<EnqueueResult> {
   const client = getClient();
 
   const result = await client.publishJSON({
     url: `${APP_URL}/api/queue`,
-    body: { agentType, input },
+    body: { agentType, input, triggeredBy: opts?.triggeredBy ?? "ceo" },
     retries: 3,
     ...(opts?.delay ? { delay: Math.ceil(opts.delay / 1000) } : {}),
   });

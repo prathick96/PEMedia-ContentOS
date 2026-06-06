@@ -16,7 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { verifyQStashRequest } from "@/lib/queues/receiver";
-import type { BaseAgent } from "@/lib/agents/base";
+import type { BaseAgent, TriggeredBy } from "@/lib/agents/base";
 import { CeoAgent } from "@/lib/agents/ceo";
 import { ScoutAgent } from "@/lib/agents/scout";
 import { CreativeAgent } from "@/lib/agents/creative";
@@ -46,10 +46,14 @@ export async function POST(req: Request) {
     const payload = JSON.parse(rawBody) as {
       agentType?: string;
       input?: Record<string, unknown>;
+      triggeredBy?: TriggeredBy;
     };
 
     agentType = payload.agentType;
     const input = payload.input ?? {};
+    // Provenance: the daily schedule sets "cron"; CEO fan-out (enqueueAgent) sets
+    // "ceo". Default to "ceo" — the common case for jobs arriving on this queue.
+    const triggeredBy: TriggeredBy = payload.triggeredBy ?? "ceo";
 
     if (!agentType) {
       return NextResponse.json(
@@ -71,9 +75,9 @@ export async function POST(req: Request) {
     }
 
     const agent = new AgentClass();
-    const result = await agent.run(input);
+    const result = await agent.run(input, { triggeredBy });
 
-    return NextResponse.json({ success: true, agentType, result });
+    return NextResponse.json({ success: true, agentType, triggeredBy, result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
 

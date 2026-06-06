@@ -12,14 +12,22 @@ export interface AgentOutput {
   error?: string;
 }
 
+/** Provenance for an agent run — recorded on agent_jobs.triggered_by. */
+export type TriggeredBy = "ceo" | "manual" | "cron";
+
+export interface RunOptions {
+  /** Who triggered this run. Defaults to "manual". Cron schedules pass "cron". */
+  triggeredBy?: TriggeredBy;
+}
+
 export abstract class BaseAgent {
   abstract readonly type: AgentType;
   abstract readonly systemPrompt: string;
 
   protected db = getServerClient();
 
-  async run(input: AgentInput): Promise<AgentOutput> {
-    const job = await this.createJob(input);
+  async run(input: AgentInput, opts?: RunOptions): Promise<AgentOutput> {
+    const job = await this.createJob(input, opts?.triggeredBy ?? "manual");
     const startedAt = Date.now();
 
     try {
@@ -39,14 +47,14 @@ export abstract class BaseAgent {
     return generateText(this.systemPrompt, prompt);
   }
 
-  private async createJob(input: AgentInput) {
+  private async createJob(input: AgentInput, triggeredBy: TriggeredBy) {
     const { data, error } = await this.db
       .from("agent_jobs")
       .insert({
         agent_type: this.type,
         status: "running",
         input,
-        triggered_by: "manual",
+        triggered_by: triggeredBy,
         started_at: new Date().toISOString(),
       })
       .select()
