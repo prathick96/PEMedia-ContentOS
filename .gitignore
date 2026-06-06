@@ -34,7 +34,7 @@ yarn-error.log*
 .env.local
 .env*.local
 .env.production
-.env
+/.env
 
 # claude-mem database (semantic memory — local only)
 .claude/memory/*.db
