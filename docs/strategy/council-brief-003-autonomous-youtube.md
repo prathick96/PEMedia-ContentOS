@@ -92,14 +92,36 @@ autonomous upload can suspend the account that funds everything.
 | 0 | Script + 9:16 short package (Production) | ✅ done | best-in-class prompt, voice_direction, thumbnail_concept |
 | 1 | **QA Reviewer gate** | ✅ done | `lib/qa-review`, agent, migration 006 |
 | 2 | **YouTube OAuth connect** (this channel) | ✅ built | `lib/youtube.ts`, `/api/auth/youtube/{connect,callback}`, migration 007; live consent pending operator |
-| 3 | Voice render (ElevenLabs API) | ⏳ | `lib/elevenlabs.ts` exists; wire into pipeline, store `voice_url` |
-| 4 | Visual generation + stitch/render | ⏳ | AI stills + Pexels + ffmpeg/Remotion; produces `video_url` |
-| 5 | Thumbnail image generation | ⏳ | from `thumbnail_concept` |
+| 3 | Voice render (ElevenLabs) | ✅ built | `lib/render/voice.ts` — full-narration TTS in the render pipeline |
+| 4 | Render/stitch → MP4 | ✅ v1 | `lib/render/*` + `/api/render`: brand-color bg + word-timed burned captions via ffmpeg; 16:9 long-form + 9:16 short. AI/stock b-roll = upgrade |
+| 5 | Thumbnail image generation | ⏳ | from `thumbnail_concept` (needs an image-gen provider) |
 | 6 | **YouTube resumable upload** | ✅ built | `uploadVideo()` + `/api/youtube/test-upload`; wire into Publisher next |
 | 7 | Vertical short export + IG/FB cross-post | ⏳ | Meta Graph API (start Business verification now) |
 | 8 | Pipeline orchestration (QStash cron) | ⏳ | Scout→…→QA→Publisher, human approval gate between QA and live |
 
 Earn hands-off (step 2→ auto_publish) only after QA's track record clears the bar in §2.
+
+## Render layer v1 — how to run it
+
+`POST /api/render { "video_id": "<uuid>", "include_short": true }` turns a video row's script
+into an MP4 (stored on `video_url`, status → `VIDEO_DONE`), ready for the Publisher's upload.
+
+**What v1 produces:** ElevenLabs narration over a brand-colored background with word-timed,
+burned-in captions, assembled by ffmpeg — 16:9 long-form + an optional 9:16 short. Fully
+autonomous, free-tier, copyright-safe (no third-party footage or music). It is deliberately
+minimal; stock/AI b-roll and music are the next upgrade (the engine is built to slot them in).
+
+**Prerequisites (operator, once):**
+1. **Install ffmpeg** (includes ffprobe) and ensure both are on PATH — verify with `ffmpeg -version`.
+2. **ElevenLabs:** add `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` to `.env.local` (pick a warm,
+   non-robotic voice in ElevenLabs → Voices; copy its id). Restart the dev server.
+3. Background color comes from the channel's `brand_doc.brand_colors.primary` automatically.
+
+**Pipeline position:** Production (script) → **`/api/render` (this)** → QA Reviewer → Publisher.
+Output `video_url` is the local file path the Publisher's `uploadVideo` reads.
+
+**v1 limitations (tracked):** captions are scene-level proportional, not word-synced (upgrade:
+ElevenLabs timestamp API); visuals are color cards, not b-roll; no background music.
 
 ---
 
