@@ -1,5 +1,5 @@
 import { BaseAgent, type AgentInput } from "./base";
-import type { NicheSlug } from "@/lib/db/schema";
+import type { BrandVoice, NicheSlug } from "@/lib/db/schema";
 import { reviewGate } from "@/lib/council";
 import { requireApproval } from "@/lib/approvals";
 import { parseJsonResponse } from "@/lib/anthropic";
@@ -24,7 +24,7 @@ Output valid JSON matching this structure:
   "recommended_name": string,
   "tagline": string,
   "audience_persona": string,
-  "brand_voice": string,
+  "brand_voice": { "dos": string[], "donts": string[], "example_sentence": string },
   "brand_colors": { "primary": string, "secondary": string, "accent": string },
   "thumbnail_style_guide": string,
   "content_pillars": string[],
@@ -75,7 +75,7 @@ Output valid JSON only — no markdown, no explanation.`;
     const brandDoc = parseJsonResponse<{
       recommended_name: string;
       tagline: string;
-      brand_voice: string;
+      brand_voice: string | BrandVoice;
       content_pillars: string[];
       series: Record<string, string>[];
     }>(response);

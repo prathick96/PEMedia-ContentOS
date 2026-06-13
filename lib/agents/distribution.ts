@@ -19,20 +19,31 @@ export const CROSS_PROMO_EVERY = 5;
 /** Spoken-length budget for the cross-promo tail, in seconds. */
 export const PROMO_TAIL_SECS = 5;
 
-/** The four vertical surfaces a single 9:16 file is posted to. */
+/** The vertical surfaces a single 9:16 file can be posted to. */
 export type ShortSurface =
   | "youtube_shorts"
   | "instagram_reels"
-  | "tiktok"
-  | "facebook_reels";
+  | "facebook_reels"
+  | "tiktok";
 
 export type LongSurface = "youtube";
 
-export const SHORT_SURFACES: readonly ShortSurface[] = [
+/**
+ * Default short fan-out. TikTok is intentionally excluded: it's banned in India
+ * (where the operator is based) and its Content Posting API needs an app audit,
+ * so it's deferred until the planned Canada relocation. Opt in per production via
+ * buildDistributionPlan(crossPromote, { includeTikTok: true }).
+ */
+export const DEFAULT_SHORT_SURFACES: readonly ShortSurface[] = [
   "youtube_shorts",
   "instagram_reels",
-  "tiktok",
   "facebook_reels",
+] as const;
+
+/** Every surface we know how to target, including opt-in ones (TikTok). */
+export const ALL_SHORT_SURFACES: readonly ShortSurface[] = [
+  ...DEFAULT_SHORT_SURFACES,
+  "tiktok",
 ] as const;
 
 /**
@@ -86,12 +97,23 @@ export interface DistributionPlan {
   };
 }
 
-/** Build the per-production distribution plan. */
-export function buildDistributionPlan(crossPromote: boolean): DistributionPlan {
+export interface DistributionOptions {
+  /** Include TikTok in the short fan-out. Deferred by default — see DEFAULT_SHORT_SURFACES. */
+  includeTikTok?: boolean;
+}
+
+/** Build the per-production distribution plan. TikTok is opt-in (deferred). */
+export function buildDistributionPlan(
+  crossPromote: boolean,
+  opts: DistributionOptions = {}
+): DistributionPlan {
+  const surfaces = opts.includeTikTok
+    ? [...ALL_SHORT_SURFACES]
+    : [...DEFAULT_SHORT_SURFACES];
   return {
     longForm: { surface: "youtube", aspect: "16:9", ai_disclosure: true },
     short: {
-      surfaces: [...SHORT_SURFACES],
+      surfaces,
       aspect: "9:16",
       crossPromote,
       ai_disclosure: true,

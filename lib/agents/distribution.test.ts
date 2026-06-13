@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ShortCut } from "@/lib/db/schema";
 import {
+  ALL_SHORT_SURFACES,
   CROSS_PROMO_EVERY,
-  SHORT_SURFACES,
+  DEFAULT_SHORT_SURFACES,
   buildDistributionPlan,
   buildShortNarration,
   composePromoTail,
@@ -77,16 +78,25 @@ describe("buildShortNarration", () => {
 });
 
 describe("buildDistributionPlan", () => {
-  it("sends long-form to YouTube and the short to all four reel surfaces", () => {
+  it("sends long-form to YouTube and the short to YouTube/IG/FB by default", () => {
     const plan = buildDistributionPlan(false);
     expect(plan.longForm.surface).toBe("youtube");
     expect(plan.longForm.aspect).toBe("16:9");
-    expect(plan.short.surfaces).toEqual(SHORT_SURFACES);
+    expect(plan.short.surfaces).toEqual(DEFAULT_SHORT_SURFACES);
     expect(plan.short.surfaces).toContain("youtube_shorts");
     expect(plan.short.surfaces).toContain("instagram_reels");
-    expect(plan.short.surfaces).toContain("tiktok");
     expect(plan.short.surfaces).toContain("facebook_reels");
     expect(plan.short.aspect).toBe("9:16");
+  });
+
+  it("defers TikTok by default (banned in IN until Canada relocation)", () => {
+    expect(buildDistributionPlan(false).short.surfaces).not.toContain("tiktok");
+  });
+
+  it("includes TikTok only when explicitly opted in", () => {
+    const plan = buildDistributionPlan(false, { includeTikTok: true });
+    expect(plan.short.surfaces).toEqual(ALL_SHORT_SURFACES);
+    expect(plan.short.surfaces).toContain("tiktok");
   });
 
   it("always requires AI disclosure on every surface (synthetic voice/visuals)", () => {
@@ -104,6 +114,6 @@ describe("buildDistributionPlan", () => {
     const a = buildDistributionPlan(false);
     a.short.surfaces.push("tiktok");
     const b = buildDistributionPlan(false);
-    expect(b.short.surfaces).toEqual(SHORT_SURFACES);
+    expect(b.short.surfaces).toEqual(DEFAULT_SHORT_SURFACES);
   });
 });

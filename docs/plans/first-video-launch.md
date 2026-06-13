@@ -80,17 +80,21 @@ distribution engine.
 **Account setup (Day 0, after the name is approved):**
 1. **Check the @handle on all four platforms first** (youtube.com, instagram.com, tiktok.com,
    facebook.com — 5 minutes). If it's taken anywhere, pick the next name candidate and update
-   the channel row. Do this BEFORE creating any account.
-2. Create: YouTube channel · Instagram **Creator** account · TikTok account ·
-   Facebook **Page** (same name/handle/avatar everywhere). Creator/Page types matter —
-   personal accounts can't use the posting APIs in Phase 3.
+   the channel row. Do this BEFORE creating any account. Even though TikTok is deferred (below),
+   **reserve the TikTok @handle now** (via VPN, 5 min) so it isn't squatted before the move.
+2. Create: YouTube channel · Instagram **Creator** account · Facebook **Page**
+   (same name/handle/avatar everywhere). Creator/Page types matter — personal accounts can't
+   use the posting APIs in Phase 3. **TikTok: reserve the handle only, defer the rest.**
 
 **Per video (manual until Phase 3):**
 - Long-form (16:9) → YouTube
 - One 30–45s vertical cut (9:16, burned-in captions, self-contained payoff, platform-neutral
-  CTA) → YouTube Shorts + Instagram Reels + TikTok + Facebook Reels — same file, four uploads
-- AI-disclosure: YouTube "altered content" = YES; TikTok AI-generated label = ON; mention
-  AI narration in IG/FB caption
+  CTA) → YouTube Shorts + Instagram Reels + Facebook Reels — same file, three uploads
+- **TikTok is deferred until the Canada relocation** (banned in IN; its Content Posting API
+  needs an app audit). It's an opt-in surface in code — `buildDistributionPlan(crossPromote,
+  { includeTikTok: true })` — off by default. Flip it on once relocated.
+- AI-disclosure: YouTube "altered content" = YES; mention AI narration in IG/FB caption
+  (TikTok AI-generated label applies when TikTok is re-enabled)
 - The 18-hour rule applies per channel per platform, not across platforms — same-day
   cross-posting of the same video is fine
 

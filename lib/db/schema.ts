@@ -8,7 +8,8 @@ export type VideoStatus =
   | "THUMBNAIL_DONE" | "READY"
   | "SCHEDULED" | "PUBLISHED" | "ARCHIVED";
 
-export type AgentType = "ceo" | "scout" | "creative" | "production" | "publisher" | "analytics";
+export type AgentType =
+  | "ceo" | "scout" | "creative" | "production" | "qa" | "publisher" | "analytics";
 export type AgentJobStatus = "queued" | "running" | "completed" | "failed";
 export type RevenueSource = "adsense" | "affiliate" | "sponsor" | "membership" | "product";
 
@@ -36,10 +37,21 @@ export interface Channel {
   created_at: string;
 }
 
+/**
+ * Forgeable brand voice: explicit DOs/DON'Ts + an example sentence written in
+ * the voice, so a script writer (or the Production Agent) can reproduce it.
+ */
+export interface BrandVoice {
+  dos: string[];
+  donts: string[];
+  example_sentence: string;
+}
+
 export interface ChannelBrandDoc {
   tagline: string;
   audience_persona: string;
-  brand_voice: string;
+  /** Structured in current brand docs; legacy rows may store a plain string. */
+  brand_voice: string | BrandVoice;
   brand_colors: { primary: string; secondary: string; accent: string };
   thumbnail_style_guide: string;
   content_pillars: string[];
@@ -254,6 +266,41 @@ export interface CouncilDecisionRow {
   payload: Record<string, unknown>;
   convened_at: string;
   created_at: string;
+}
+
+// ── Platform OAuth (migration 007) ───────────────────────────
+
+export interface ChannelOAuthRow {
+  id: string;
+  channel_id: string;
+  provider: Platform;
+  refresh_token: string;
+  access_token: string | null;
+  token_expiry: string | null;
+  scope: string | null;
+  /** Connected platform account identity (e.g. YouTube channel id + title). */
+  provider_account_id: string | null;
+  provider_account_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── QA review (migration 006) ────────────────────────────────
+
+export interface QAReviewResultRow {
+  id: string;
+  video_id: string | null;
+  series_id: string | null;
+  topic: string;
+  /** 'auto_publish' | 'needs_human_review' | 'reject'. */
+  decision: string;
+  /** Composite 0–100. */
+  score: number;
+  /** Full QADimensions from lib/qa-review/types.ts. */
+  dimensions: Record<string, unknown>;
+  reasons: string[];
+  flags: string[];
+  evaluated_at: string;
 }
 
 // ── Quality gate (migration 003) ─────────────────────────────
