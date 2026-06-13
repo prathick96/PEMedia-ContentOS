@@ -112,6 +112,8 @@ Synthesize the council's decision. Output strict JSON only.`;
   const raw = await generateText(CHAIRMAN_PROMPT, chairmanUser, {
     model: opts.chairmanModel ?? MODELS.chairman,
     temperature: 0.2,
+    // Synthesis (decision + ranked actions + dissents) can overflow the 4096 default.
+    maxTokens: 8192,
   });
   const c = parseJsonResponse<RawChairmanJson>(raw);
 
@@ -185,6 +187,7 @@ Render the binary verdict. Output strict JSON only.`;
     const raw = await generateText(gateChairmanPrompt(kind, label), chairmanUser, {
       model: opts.chairmanModel ?? MODELS.chairman,
       temperature: 0.1,
+      maxTokens: 8192,
     });
     const g = parseJsonResponse<RawGateJson>(raw);
     verdict = {

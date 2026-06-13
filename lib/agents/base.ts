@@ -43,8 +43,8 @@ export abstract class BaseAgent {
 
   protected abstract execute(input: AgentInput): Promise<Record<string, unknown>>;
 
-  protected async callClaude(prompt: string): Promise<string> {
-    return generateText(this.systemPrompt, prompt);
+  protected async callClaude(prompt: string, opts?: { maxTokens?: number }): Promise<string> {
+    return generateText(this.systemPrompt, prompt, { maxTokens: opts?.maxTokens });
   }
 
   private async createJob(input: AgentInput, triggeredBy: TriggeredBy) {

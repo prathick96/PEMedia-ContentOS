@@ -1,8 +1,13 @@
 import { Header } from "@/components/dashboard/Header";
+import { getScheduleData } from "@/lib/db/queries";
+
+export const dynamic = "force-dynamic";
 
 const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function SchedulePage() {
+export default async function SchedulePage() {
+  const { scheduled, publishedThisMonth } = await getScheduleData();
+
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
@@ -11,6 +16,20 @@ export default function SchedulePage() {
   const cells = Array.from({ length: startDay + daysInMonth }, (_, i) =>
     i < startDay ? null : i - startDay + 1
   );
+
+  // Days of the current month that have scheduled or published posts
+  const markedDays = new Set<number>();
+  for (const v of [...scheduled, ...publishedThisMonth]) {
+    const iso = v.scheduled_at ?? v.published_at;
+    if (!iso) continue;
+    const d = new Date(iso);
+    if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
+      markedDays.add(d.getDate());
+    }
+  }
+
+  const ytCount = publishedThisMonth.filter((v) => v.youtube_id).length;
+  const ttCount = publishedThisMonth.filter((v) => v.tiktok_id).length;
 
   return (
     <div>
@@ -28,7 +47,7 @@ export default function SchedulePage() {
             {cells.map((day, i) => (
               <div
                 key={i}
-                className={`aspect-square rounded-md flex items-center justify-center text-xs ${
+                className={`aspect-square rounded-md flex flex-col items-center justify-center text-xs ${
                   day === null
                     ? ""
                     : day === today.getDate()
@@ -37,25 +56,65 @@ export default function SchedulePage() {
                 }`}
               >
                 {day || ""}
+                {day !== null && markedDays.has(day) && (
+                  <span className="w-1 h-1 rounded-full bg-emerald-400 mt-0.5" />
+                )}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-8 text-center">
-          <div className="text-2xl mb-2 text-zinc-700">▦</div>
-          <div className="text-sm font-medium text-zinc-400 mb-1">No scheduled posts</div>
-          <div className="text-xs text-zinc-600 max-w-sm mx-auto">
-            The Publisher Agent will populate this calendar with scheduled uploads.
-            Posts are randomised within ±90 minutes of target windows per platform analytics.
+        {scheduled.length === 0 ? (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-8 text-center">
+            <div className="text-2xl mb-2 text-zinc-700">▦</div>
+            <div className="text-sm font-medium text-zinc-400 mb-1">No scheduled posts</div>
+            <div className="text-xs text-zinc-600 max-w-sm mx-auto">
+              The Publisher Agent populates this calendar with scheduled uploads.
+              Posts are randomised within ±90 minutes of target windows, and never closer
+              than 18 hours apart on the same channel.
+            </div>
           </div>
-        </div>
+        ) : (
+          <section>
+            <h2 className="text-xs text-zinc-500 uppercase tracking-wider mb-3">
+              Upcoming ({scheduled.length})
+            </h2>
+            <div className="rounded-xl border border-zinc-800 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-800 bg-zinc-900/50">
+                    <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Scheduled for</th>
+                    <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Title</th>
+                    <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Channel · Series</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scheduled.map((v) => (
+                    <tr key={v.id} className="border-b border-zinc-800/50 last:border-0">
+                      <td className="px-4 py-3 text-emerald-400 text-xs font-mono">
+                        {v.scheduled_at ? new Date(v.scheduled_at).toLocaleString() : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-200 text-xs">{v.title ?? v.topic}</td>
+                      <td className="px-4 py-3 text-zinc-500 text-xs">
+                        {v.series?.channels?.name ?? "—"} · {v.series?.name ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
-          {["YouTube", "TikTok", "Shorts"].map((platform) => (
+          {[
+            { platform: "YouTube", count: ytCount },
+            { platform: "TikTok", count: ttCount },
+            { platform: "Total", count: publishedThisMonth.length },
+          ].map(({ platform, count }) => (
             <div key={platform} className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
               <div className="text-sm font-medium text-zinc-400 mb-1">{platform}</div>
-              <div className="text-2xl font-bold text-zinc-600">0</div>
+              <div className={`text-2xl font-bold ${count > 0 ? "text-zinc-200" : "text-zinc-600"}`}>{count}</div>
               <div className="text-xs text-zinc-700">posts this month</div>
             </div>
           ))}

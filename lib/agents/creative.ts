@@ -2,6 +2,7 @@ import { BaseAgent, type AgentInput } from "./base";
 import type { NicheSlug } from "@/lib/db/schema";
 import { reviewGate } from "@/lib/council";
 import { requireApproval } from "@/lib/approvals";
+import { parseJsonResponse } from "@/lib/anthropic";
 
 interface CreativeInput extends AgentInput {
   niche: NicheSlug;
@@ -47,7 +48,13 @@ The content must be 100% producible with AI tools (no on-camera talent, no licen
 Output valid JSON only — no markdown, no explanation.`;
 
     const response = await this.callClaude(prompt);
-    const brandDoc = JSON.parse(response);
+    const brandDoc = parseJsonResponse<{
+      recommended_name: string;
+      tagline: string;
+      brand_voice: string;
+      content_pillars: string[];
+      series: Record<string, string>[];
+    }>(response);
 
     // Tactical gate: the council greenlights (or blocks) the launch before we
     // commit a channel. Fail-closed — a non-approval stops the launch here.
