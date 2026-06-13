@@ -1,5 +1,6 @@
 import { BaseAgent, type AgentInput } from "./base";
 import { scoreTopicQuality } from "@/lib/quality-gate";
+import { parseJsonResponse } from "@/lib/anthropic";
 
 export class ProductionAgent extends BaseAgent {
   readonly type = "production" as const;
@@ -72,7 +73,12 @@ Originality notes: ${gate.dimensions.reasoning}
 
 Output valid JSON only.`;
 
-    const script = JSON.parse(await this.callClaude(prompt));
+    const script = parseJsonResponse<{
+      title_options?: string[];
+      description?: string;
+      tags?: string[];
+      chapters?: { time: string; title: string }[];
+    }>(await this.callClaude(prompt));
 
     // ── Step 4: Persist video row ─────────────────────────────────────────────
     const { data: video } = await this.db

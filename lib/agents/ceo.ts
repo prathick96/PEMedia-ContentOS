@@ -1,5 +1,6 @@
 import { BaseAgent, type AgentInput } from "./base";
 import { convene } from "@/lib/council";
+import { parseJsonResponse } from "@/lib/anthropic";
 
 export class CeoAgent extends BaseAgent {
   readonly type = "ceo" as const;
@@ -67,8 +68,9 @@ Prioritise originality and quality over volume (YouTube demonetises mass-produce
 If no channels exist, prioritise launching the Tech channel FIRST (alone) via the Creative Agent.
 Output valid JSON only.`;
 
-    const response = await this.callClaude(prompt);
-    const queue = JSON.parse(response);
+    // The task queue + assessment can be long-form JSON — needs more than the 4096 default.
+    const response = await this.callClaude(prompt, { maxTokens: 8192 });
+    const queue = parseJsonResponse<Record<string, unknown>>(response);
 
     return {
       ...queue,

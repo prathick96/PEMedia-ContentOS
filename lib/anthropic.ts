@@ -1,8 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+let _anthropic: Anthropic | null = null;
+
+/** Lazy singleton — constructing eagerly at module load crashes builds/CI without a key. */
+export function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error("ANTHROPIC_API_KEY is not set. Add it to .env.local.");
+    }
+    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _anthropic;
+}
 
 /**
  * Model registry. Seats and agents default to Sonnet for cost discipline
@@ -33,13 +42,20 @@ export async function generateText(
   userMessage: string,
   opts: GenerateOptions = {}
 ): Promise<string> {
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model: opts.model ?? MODEL,
     max_tokens: opts.maxTokens ?? 4096,
     temperature: opts.temperature,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   });
+
+  if (response.stop_reason === "max_tokens") {
+    throw new Error(
+      `Claude response truncated at the max_tokens limit (${opts.maxTokens ?? 4096}). ` +
+        "Increase maxTokens for this call or ask for more concise output."
+    );
+  }
 
   const block = response.content[0];
   if (block.type !== "text") throw new Error("Unexpected response type from Claude");

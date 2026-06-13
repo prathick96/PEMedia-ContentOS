@@ -26,12 +26,13 @@ export default function LoginPage() {
           </button>
 
           <p className="text-xs text-zinc-600 text-center mt-4">
-            Google OAuth will be wired in Phase 1 when Supabase + YouTube API keys are configured.
+            Auth is deferred while ContentOS runs locally. It becomes mandatory before any
+            public deploy — see docs/deploy/vercel.md.
           </p>
         </div>
 
         <p className="text-center text-xs text-zinc-700 mt-4">
-          Phase 0 — Foundation Build · {new Date().toLocaleDateString()}
+          Phase 1 — Live Data · {new Date().toLocaleDateString()}
         </p>
       </div>
     </div>

@@ -95,7 +95,8 @@ export interface TrendSignal {
   id: string;
   niche_id: string;
   topic: string;
-  source: "google_trends" | "reddit" | "youtube" | "rss";
+  /** Live sources (hackernews/reddit/youtube) or claude_analysis when model-generated. */
+  source: "hackernews" | "reddit" | "youtube" | "claude_analysis" | "google_trends" | "rss";
   score: number;
   raw_data: Record<string, unknown>;
   captured_at: string;

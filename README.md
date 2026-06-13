@@ -28,15 +28,21 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) — redirects to the CEO Dashboard.
 
-## Phase 0 (Current)
+## Phase 1 (Current)
 
-The dashboard shell is built. No live APIs yet. All pages show empty states with clear CTAs for what comes next.
+The dashboard is live against Supabase: every page reads real data, agents are
+triggerable from the UI, and the Approvals page gates high-stakes actions.
+The Scout Agent grounds its topic scoring in free live sources (Hacker News,
+Reddit public JSON, YouTube trending). Local-only — **no auth yet**, so do not
+deploy publicly before adding it (see `docs/deploy/vercel.md`).
 
 **Next steps:**
-1. Create Supabase project → run `supabase/migrations/001_initial.sql`
-2. Get Anthropic API key → add to `.env.local`
-3. Trigger Creative Agent for Tech + History niches → channels get names and series
+1. Trigger the Creative Agent from the Channels page → launch the Tech channel
+2. Approve the channel on the Approvals page
+3. Greenlight first topics through the Production Agent (scripts)
 4. Produce first 3 videos manually → validate niche before automating
+
+**Quality gates:** `npm run typecheck` · `npm run lint` · `npm test` · CI runs all four on push/PR.
 
 ## Architecture
 

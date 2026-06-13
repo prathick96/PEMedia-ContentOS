@@ -1,5 +1,6 @@
 import { BaseAgent, type AgentInput } from "./base";
 import { requireApproval } from "@/lib/approvals";
+import { parseJsonResponse } from "@/lib/anthropic";
 
 export class PublisherAgent extends BaseAgent {
   readonly type = "publisher" as const;
@@ -51,7 +52,9 @@ Description: ${video.description}
 Channel: ${JSON.stringify(video.series?.channels)}
 Output valid JSON only.`;
 
-    const optimised = JSON.parse(await this.callClaude(prompt));
+    const optimised = parseJsonResponse<Record<string, unknown> & {
+      platform_specific?: { youtube?: Record<string, unknown>; tiktok?: Record<string, unknown> };
+    }>(await this.callClaude(prompt));
     optimised.scheduled_at = scheduledAt.toISOString();
 
     // Compliance (Council Brief 001 §1.3): our videos use synthetic voice/visuals,
