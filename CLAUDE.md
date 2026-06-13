@@ -142,7 +142,7 @@ Copy `.env.example` to `.env.local` (git-ignored).
 1. Never use actual movie clips or sports footage — ContentID strikes kill channels
 2. Always add AI disclosure labels where platforms require them
 3. Never post two videos within 18 hours on the same channel
-4. Post via official APIs only: YouTube Data API v3, TikTok Content Posting API
+4. Post via official APIs only: YouTube Data API v3, TikTok Content Posting API, Meta Graph API (Instagram Reels + Facebook Pages)
 5. YouTube requires AI labels for synthetic content in news/health/electoral categories
 6. Only add paid services when revenue exists to fund them
 

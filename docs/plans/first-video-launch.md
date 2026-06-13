@@ -72,6 +72,85 @@ and which series format earns the automation investment.
     `status = 'PUBLISHED'`, `published_at` (Supabase Studio SQL editor for now —
     a dashboard edit form is a Phase 2 nicety).
 
+## Multi-platform distribution (added 2026-06-14)
+
+One production, five surfaces. The long-form video is the product; the vertical cut is the
+distribution engine.
+
+**Account setup (Day 0, after the name is approved):**
+1. **Check the @handle on all four platforms first** (youtube.com, instagram.com, tiktok.com,
+   facebook.com — 5 minutes). If it's taken anywhere, pick the next name candidate and update
+   the channel row. Do this BEFORE creating any account.
+2. Create: YouTube channel · Instagram **Creator** account · TikTok account ·
+   Facebook **Page** (same name/handle/avatar everywhere). Creator/Page types matter —
+   personal accounts can't use the posting APIs in Phase 3.
+
+**Per video (manual until Phase 3):**
+- Long-form (16:9) → YouTube
+- One 30–45s vertical cut (9:16, burned-in captions, self-contained payoff, platform-neutral
+  CTA) → YouTube Shorts + Instagram Reels + TikTok + Facebook Reels — same file, four uploads
+- AI-disclosure: YouTube "altered content" = YES; TikTok AI-generated label = ON; mention
+  AI narration in IG/FB caption
+- The 18-hour rule applies per channel per platform, not across platforms — same-day
+  cross-posting of the same video is fine
+
+**Cross-promo rule — 1 in every 5 shorts (added 2026-06-14):**
+The short is the distribution engine; the long-form is the product. But ending *every*
+short with "watch the full video on YouTube" reads as spam and suppresses reach. So only
+**1 short in every 5** ends with a ~5-second spoken CTA driving viewers to the YouTube
+long-form ("Want the full breakdown? The complete video is on YouTube — search <Channel>.").
+The other 4 are fully self-contained.
+- The rule is deterministic and automatic: the Production Agent counts the channel's prior
+  shorts and flags every 5th one (`cross_promo_youtube = true` on the short's video row;
+  `shouldCrossPromote()` in `lib/agents/distribution.ts`).
+- The promo short's narration is generated **with the 5s tail already appended** — in the
+  Production output it's `script.short_cut.tts_narration`. For the other four, that field is
+  just the self-contained narration. So the editor never decides this by hand; paste whatever
+  `tts_narration` says.
+- The CTA is platform-neutral (names the channel, points to YouTube, "link in description") —
+  the identical audio plays on all four surfaces, so it can't say "below" or "in bio".
+
+**Phase 3 automation note:** posting APIs are YouTube Data API v3, TikTok Content Posting
+API, and Meta Graph API (Instagram Reels + Facebook Pages — requires a Meta app + Business
+verification; start that approval process early, it takes days–weeks). Migrations
+`004_platforms.sql` (IG/FB channels + per-platform post ids) and `005_shorts.sql` (shorts as
+their own distribution rows: `is_short`, `parent_video_id`, `cross_promo_youtube`) extend the
+schema for this — **apply both in the Supabase SQL editor after 001–003.**
+
+## Best-in-class scripting / voice / video (Production Agent output)
+
+`POST /api/agents/production` (or `/produce-video`) now returns one package that drives the
+entire manual workflow below. The quality gate scores the topic first (pass ≥60); on pass the
+agent emits a long-form 16:9 script **and** the 9:16 short cut in a single call. Fields on
+`script` (the `videos.script` JSON), and how the manual editor uses each:
+
+**Script → screen / editor:**
+- `hook` — the literal first 0–5s. If it doesn't open a curiosity loop, reject and re-run.
+- `sections[]` — each beat carries: `narration` (exact spoken words), `duration_target_secs`,
+  `visual_direction` (screen-rec vs AI still vs stock), `broll_keywords` (paste into Pexels/
+  Pixabay), `ai_image_prompts` (paste into the AI image/video generator, 16:9), `on_screen_text`.
+- `chapters`, `title_options` (pick 1 of 3), `description` (replace/delete `[AFFILIATE_LINK]`),
+  `tags`.
+
+**Voice (ElevenLabs):**
+- `tts_narration` is the full hook → sections → CTA as one TTS-ready string — paste it straight
+  in (or section-by-section for easier re-takes). It contains no markdown or stage directions.
+- `voice_direction` gives `style`, `pace`, and concrete `elevenlabs_settings`
+  (`stability`, `similarity_boost`) — set those sliders to match. `per_section_notes` flags
+  where to emphasise / pause.
+
+**Visuals:** work top-down per section — screen recording first (most credible for tech),
+then `ai_image_prompts`, then `broll_keywords` as filler. Never movie clips / sports footage /
+other channels' content (hard rule).
+
+**Thumbnail:** `thumbnail_concept` gives `composition`, `text` (≤4 words), `style_notes`, and a
+ready-to-use `ai_image_prompt`. Generate it, then set text in Canva to match the chosen title.
+
+**The vertical short:** `script.short_cut` is the 30–45s 9:16 cut — `hook` (lands with sound
+off), `narration`, `captions[]` (burn these in), `ai_image_prompts` (9:16), and
+`tts_narration` (paste into ElevenLabs — already includes the 5s YouTube CTA tail **iff** this
+is the 1-in-5 promo short; see the cross-promo rule above). One vertical export → four uploads.
+
 ## Cadence after video #1 ("when to post")
 
 - **Video #1: within 72 h of starting Day 0.** Speed beats polish here — a published
