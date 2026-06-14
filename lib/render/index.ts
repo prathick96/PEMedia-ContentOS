@@ -17,6 +17,7 @@ import { buildRenderPlan, buildShortRenderPlan } from "./plan";
 import { buildSrt } from "./captions";
 import { buildRenderArgs, probeDurationSecs, runFfmpeg } from "./ffmpeg";
 import { synthesizeNarration } from "./voice";
+import { generateThumbnail } from "./thumbnail";
 import type { RenderOptions, RenderPlan, RenderResult } from "./types";
 
 async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<RenderResult> {
@@ -99,9 +100,21 @@ export async function renderVideoRow(
     short = await renderShort(script.short_cut, { ...opts, backgroundColor });
   }
 
+  // Thumbnail — best-effort: a failure here must not waste the rendered video.
+  let thumbnailUrl: string | null = null;
+  try {
+    const fallback = (video.title as string) ?? script.title_options?.[0] ?? (video.topic as string) ?? "";
+    thumbnailUrl = await generateThumbnail(script.thumbnail_concept, fallback, {
+      backgroundColor,
+      outputDir: opts.outputDir,
+    });
+  } catch (err) {
+    console.warn("[render] thumbnail generation failed:", err instanceof Error ? err.message : err);
+  }
+
   await db
     .from("videos")
-    .update({ video_url: longForm.videoPath, status: "VIDEO_DONE" })
+    .update({ video_url: longForm.videoPath, thumbnail_url: thumbnailUrl, status: "VIDEO_DONE" })
     .eq("id", videoId);
 
   return { longForm, short };
