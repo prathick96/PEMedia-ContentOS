@@ -16,12 +16,15 @@ export const maxDuration = 300;
  */
 export async function POST(req: Request) {
   try {
-    const { video_id, include_short } = await req.json();
+    const { video_id, include_short, visual_source } = await req.json();
     if (!video_id) {
       return NextResponse.json({ success: false, error: "video_id required" }, { status: 400 });
     }
     const db = getServerClient();
-    const result = await renderVideoRow(db, video_id, { includeShort: include_short === true });
+    const result = await renderVideoRow(db, video_id, {
+      includeShort: include_short === true,
+      visualSource: visual_source === "pexels" ? "pexels" : "color",
+    });
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

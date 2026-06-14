@@ -52,6 +52,65 @@ export function buildRenderArgs({ audioPath, srtPath, plan, outputPath }: Render
   ];
 }
 
+// ── B-roll slideshow (opt-in) ────────────────────────────────────────────────
+// Each scene image becomes a fixed-size clip (robust to mixed source sizes), then
+// the clips are concatenated and muxed with audio + burned captions.
+
+export interface ImageClipInput {
+  imagePath: string;
+  outputPath: string;
+  durationSecs: number;
+  width: number;
+  height: number;
+}
+
+/** Pure: ffmpeg argv to turn a still image into a WxH clip of a given duration. */
+export function buildImageClipArgs(input: ImageClipInput): string[] {
+  return [
+    "-y",
+    "-loop", "1",
+    "-i", input.imagePath,
+    "-t", input.durationSecs.toFixed(3),
+    "-vf",
+    `scale=${input.width}:${input.height}:force_original_aspect_ratio=increase,crop=${input.width}:${input.height},format=yuv420p`,
+    "-r", "30",
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-an",
+    input.outputPath,
+  ];
+}
+
+/** Pure: a concat-demuxer list file body for the given clip paths. */
+export function buildConcatListContent(clipPaths: string[]): string {
+  return clipPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n";
+}
+
+export interface BrollFinalInput {
+  concatListPath: string;
+  audioPath: string;
+  srtPath: string;
+  outputPath: string;
+}
+
+/** Pure: ffmpeg argv to concat the clips, mux narration, and burn captions. */
+export function buildBrollFinalArgs(input: BrollFinalInput): string[] {
+  return [
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", input.concatListPath,
+    "-i", input.audioPath,
+    "-vf", buildSubtitlesFilter(input.srtPath),
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-shortest",
+    input.outputPath,
+  ];
+}
+
 /** Run ffmpeg with the given args. Rejects with stderr tail on non-zero exit. */
 export function runFfmpeg(args: string[]): Promise<void> {
   return runBinary("ffmpeg", args).then(() => undefined);

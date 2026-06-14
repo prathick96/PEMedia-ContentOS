@@ -3,6 +3,7 @@ import type { ShortCut, VideoScript } from "@/lib/db/schema";
 import {
   buildRenderPlan,
   buildShortRenderPlan,
+  computeSceneDurations,
   countWords,
   normalizeColor,
   truncateCaption,
@@ -90,6 +91,21 @@ describe("buildRenderPlan", () => {
   it("throws when there is no narration to speak", () => {
     const empty: VideoScript = { ...script, hook: "", sections: [], cta: "", tts_narration: "" };
     expect(() => buildRenderPlan(empty)).toThrow(/no narration/i);
+  });
+});
+
+describe("computeSceneDurations", () => {
+  it("splits total duration proportionally to words and sums to total", () => {
+    const durs = computeSceneDurations(
+      [{ text: "a", words: 10 }, { text: "b", words: 30 }],
+      40
+    );
+    expect(durs).toEqual([10, 30]);
+    expect(durs.reduce((s, d) => s + d, 0)).toBeCloseTo(40);
+  });
+  it("returns [] for empty scenes or non-positive duration", () => {
+    expect(computeSceneDurations([], 40)).toEqual([]);
+    expect(computeSceneDurations([{ text: "a", words: 1 }], 0)).toEqual([]);
   });
 });
 

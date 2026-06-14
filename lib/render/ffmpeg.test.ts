@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildRenderArgs, buildSubtitlesFilter, escapeSubtitlesPath } from "./ffmpeg";
+import {
+  buildBrollFinalArgs,
+  buildConcatListContent,
+  buildImageClipArgs,
+  buildRenderArgs,
+  buildSubtitlesFilter,
+  escapeSubtitlesPath,
+} from "./ffmpeg";
 
 describe("escapeSubtitlesPath", () => {
   it("converts backslashes to slashes and escapes the drive colon (Windows)", () => {
@@ -45,6 +52,49 @@ describe("buildRenderArgs", () => {
   });
 
   it("writes to the output path last", () => {
+    expect(args[args.length - 1]).toBe("/t/out.mp4");
+  });
+});
+
+describe("buildImageClipArgs", () => {
+  const args = buildImageClipArgs({
+    imagePath: "/t/img.jpg",
+    outputPath: "/t/clip.mp4",
+    durationSecs: 4.2,
+    width: 1920,
+    height: 1080,
+  });
+  it("loops the still for the scene duration at the target size", () => {
+    expect(args).toContain("-loop");
+    expect(args[args.indexOf("-t") + 1]).toBe("4.200");
+    expect(args.join(" ")).toContain("scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080");
+    expect(args).toContain("-an"); // clips are silent
+    expect(args[args.length - 1]).toBe("/t/clip.mp4");
+  });
+});
+
+describe("buildConcatListContent", () => {
+  it("emits a concat-demuxer list, escaping single quotes", () => {
+    const content = buildConcatListContent(["/t/a.mp4", "/t/b's.mp4"]);
+    expect(content).toContain("file '/t/a.mp4'");
+    expect(content).toContain("file '/t/b'\\''s.mp4'");
+  });
+});
+
+describe("buildBrollFinalArgs", () => {
+  const args = buildBrollFinalArgs({
+    concatListPath: "/t/list.txt",
+    audioPath: "/t/a.mp3",
+    srtPath: "/t/c.srt",
+    outputPath: "/t/out.mp4",
+  });
+  it("concats clips, muxes audio, burns subtitles, bounds with -shortest", () => {
+    expect(args).toContain("concat");
+    expect(args[args.indexOf("-i")]).toBe("-i");
+    expect(args.join(" ")).toContain("/t/list.txt");
+    expect(args.join(" ")).toContain("/t/a.mp3");
+    expect(args[args.indexOf("-vf") + 1]).toContain("subtitles=");
+    expect(args).toContain("-shortest");
     expect(args[args.length - 1]).toBe("/t/out.mp4");
   });
 });

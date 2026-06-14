@@ -14,11 +14,20 @@ import { join } from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortCut, VideoScript } from "@/lib/db/schema";
 import { buildRenderPlan, buildShortRenderPlan } from "./plan";
+import { computeSceneDurations } from "./plan";
 import { buildSrt, wordsToSrt, type TimedWord } from "./captions";
-import { buildRenderArgs, probeDurationSecs, runFfmpeg } from "./ffmpeg";
+import {
+  buildBrollFinalArgs,
+  buildConcatListContent,
+  buildImageClipArgs,
+  buildRenderArgs,
+  probeDurationSecs,
+  runFfmpeg,
+} from "./ffmpeg";
+import { buildPexelsQuery, downloadToFile, fetchScenePhotos, photoUrl, pickBestPhoto } from "./visuals";
 import { synthesizeNarration, synthesizeNarrationTimed } from "./voice";
 import { generateThumbnail } from "./thumbnail";
-import type { RenderOptions, RenderPlan, RenderResult } from "./types";
+import type { Aspect, RenderOptions, RenderPlan, RenderResult } from "./types";
 
 async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<RenderResult> {
   const dir = opts.outputDir || join(tmpdir(), "pemedia-render");
@@ -49,7 +58,23 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
   const srt = words.length > 0 ? wordsToSrt(words) : buildSrt(plan.scenes, durationSecs);
   await writeFile(srtPath, srt, "utf8");
 
-  await runFfmpeg(buildRenderArgs({ audioPath, srtPath, plan, outputPath }));
+  // Visuals: opt-in Pexels b-roll, else the default brand-color background. Any
+  // failure in the b-roll path degrades cleanly to the color render.
+  let assembled = false;
+  if (opts.visualSource === "pexels") {
+    try {
+      await renderBrollVideo({ plan, durationSecs, audioPath, srtPath, outputPath, dir, stamp });
+      assembled = true;
+    } catch (err) {
+      console.warn(
+        "[render] b-roll path failed, falling back to color background:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+  if (!assembled) {
+    await runFfmpeg(buildRenderArgs({ audioPath, srtPath, plan, outputPath }));
+  }
 
   return {
     videoPath: outputPath,
@@ -58,6 +83,49 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
     height: plan.height,
     sceneCount: plan.scenes.length,
   };
+}
+
+/** Assemble the video from per-scene Pexels stills timed to the narration. */
+async function renderBrollVideo(args: {
+  plan: RenderPlan;
+  durationSecs: number;
+  audioPath: string;
+  srtPath: string;
+  outputPath: string;
+  dir: string;
+  stamp: number;
+}): Promise<void> {
+  const { plan, durationSecs, audioPath, srtPath, outputPath, dir, stamp } = args;
+  const aspect: Aspect = plan.width >= plan.height ? "16:9" : "9:16";
+  const durations = computeSceneDurations(plan.scenes, durationSecs);
+
+  const clipPaths: string[] = [];
+  for (let i = 0; i < plan.scenes.length; i++) {
+    const scene = plan.scenes[i];
+    const query = buildPexelsQuery(scene.text, scene.keywords);
+    const photos = await fetchScenePhotos(query, aspect);
+    const photo = pickBestPhoto(photos, aspect);
+    if (!photo) throw new Error(`No Pexels photo found for "${query}"`);
+
+    const imagePath = join(dir, `img-${stamp}-${i}.jpg`);
+    await downloadToFile(photoUrl(photo), imagePath);
+
+    const clipPath = join(dir, `clip-${stamp}-${i}.mp4`);
+    await runFfmpeg(
+      buildImageClipArgs({
+        imagePath,
+        outputPath: clipPath,
+        durationSecs: durations[i],
+        width: plan.width,
+        height: plan.height,
+      })
+    );
+    clipPaths.push(clipPath);
+  }
+
+  const concatListPath = join(dir, `concat-${stamp}.txt`);
+  await writeFile(concatListPath, buildConcatListContent(clipPaths), "utf8");
+  await runFfmpeg(buildBrollFinalArgs({ concatListPath, audioPath, srtPath, outputPath }));
 }
 
 function withVoiceSettings(opts: RenderOptions, script: VideoScript): RenderOptions {

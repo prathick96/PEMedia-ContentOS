@@ -18,6 +18,17 @@ export function countWords(text: string | undefined | null): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+/**
+ * Pure: per-scene display durations, proportional to spoken word count, summing
+ * to totalDuration. Used to time b-roll clips to the narration.
+ */
+export function computeSceneDurations(scenes: RenderScene[], totalDuration: number): number[] {
+  if (scenes.length === 0 || totalDuration <= 0) return [];
+  const weights = scenes.map((s) => Math.max(1, s.words));
+  const total = weights.reduce((a, b) => a + b, 0);
+  return weights.map((w) => (totalDuration * w) / total);
+}
+
 /** Shorten a caption so it stays readable on screen. */
 export function truncateCaption(text: string, max = 120): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -61,7 +72,13 @@ export function buildRenderPlan(script: VideoScript, opts: RenderOptions = {}): 
   for (const section of script.sections ?? []) {
     const spoken = section.narration?.trim() || section.content?.trim() || "";
     const text = sectionCaption(section);
-    if (text) scenes.push({ text, words: Math.max(countWords(spoken), countWords(text)) });
+    if (text) {
+      scenes.push({
+        text,
+        words: Math.max(countWords(spoken), countWords(text)),
+        keywords: section.broll_keywords,
+      });
+    }
   }
 
   const cta = script.cta?.trim();
@@ -97,7 +114,11 @@ export function buildShortRenderPlan(short: ShortCut, opts: RenderOptions = {}):
   const scenes: RenderScene[] = captionSource
     .map((c) => truncateCaption(c))
     .filter(Boolean)
-    .map((text, _i, arr) => ({ text, words: Math.max(1, Math.round(totalWords / arr.length)) }));
+    .map((text, _i, arr) => ({
+      text,
+      words: Math.max(1, Math.round(totalWords / arr.length)),
+      keywords: short.broll_keywords,
+    }));
 
   return {
     narration,

@@ -15,6 +15,8 @@ export interface RenderScene {
   text: string;
   /** Spoken word count for this beat — drives proportional timing. */
   words: number;
+  /** Stock-search keywords for this beat (b-roll path). */
+  keywords?: string[];
 }
 
 export interface RenderPlan {
@@ -37,6 +39,8 @@ export interface RenderOptions {
   similarityBoost?: number;
   /** Output directory; defaults to <tmp>/pemedia-render. */
   outputDir?: string;
+  /** Visual style: "color" (default, brand background) or "pexels" (b-roll, opt-in). */
+  visualSource?: "color" | "pexels";
 }
 
 export interface RenderResult {
