@@ -208,6 +208,35 @@ export async function fetchMyChannel(accessToken: string): Promise<YouTubeChanne
   };
 }
 
+export interface YouTubeVideoStats {
+  id: string;
+  views: number;
+  likes: number;
+  comments: number;
+}
+
+/** Fetch public statistics for up to 50 videos in one call (Data API). */
+export async function fetchVideoStats(
+  accessToken: string,
+  videoIds: string[]
+): Promise<YouTubeVideoStats[]> {
+  if (videoIds.length === 0) return [];
+  const ids = videoIds.slice(0, 50).join(",");
+  const res = await fetch(`${API_BASE}/videos?part=statistics&id=${ids}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`videos.list failed (${res.status}): ${await res.text()}`);
+  const json = (await res.json()) as {
+    items?: { id: string; statistics: Record<string, string> }[];
+  };
+  return (json.items ?? []).map((item) => ({
+    id: item.id,
+    views: Number(item.statistics.viewCount ?? 0),
+    likes: Number(item.statistics.likeCount ?? 0),
+    comments: Number(item.statistics.commentCount ?? 0),
+  }));
+}
+
 // ── Upload (resumable) ───────────────────────────────────────────────────────
 
 export interface YouTubeUploadInput {
