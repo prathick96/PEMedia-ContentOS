@@ -14,9 +14,9 @@ import { join } from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortCut, VideoScript } from "@/lib/db/schema";
 import { buildRenderPlan, buildShortRenderPlan } from "./plan";
-import { buildSrt } from "./captions";
+import { buildSrt, wordsToSrt, type TimedWord } from "./captions";
 import { buildRenderArgs, probeDurationSecs, runFfmpeg } from "./ffmpeg";
-import { synthesizeNarration } from "./voice";
+import { synthesizeNarration, synthesizeNarrationTimed } from "./voice";
 import { generateThumbnail } from "./thumbnail";
 import type { RenderOptions, RenderPlan, RenderResult } from "./types";
 
@@ -28,11 +28,26 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
   const srtPath = join(dir, `captions-${stamp}.srt`);
   const outputPath = join(dir, `video-${stamp}.mp4`);
 
-  const audio = await synthesizeNarration(plan.narration, opts);
+  // Prefer word-synced captions (ElevenLabs timestamps). Fall back to plain TTS +
+  // proportional scene captions if the timestamped call is unavailable.
+  let audio: Buffer;
+  let words: TimedWord[] = [];
+  try {
+    const timed = await synthesizeNarrationTimed(plan.narration, opts);
+    audio = timed.audio;
+    words = timed.words;
+  } catch (err) {
+    console.warn(
+      "[render] timestamped TTS failed, falling back to plain TTS:",
+      err instanceof Error ? err.message : err
+    );
+    audio = await synthesizeNarration(plan.narration, opts);
+  }
   await writeFile(audioPath, audio);
 
   const durationSecs = await probeDurationSecs(audioPath);
-  await writeFile(srtPath, buildSrt(plan.scenes, durationSecs), "utf8");
+  const srt = words.length > 0 ? wordsToSrt(words) : buildSrt(plan.scenes, durationSecs);
+  await writeFile(srtPath, srt, "utf8");
 
   await runFfmpeg(buildRenderArgs({ audioPath, srtPath, plan, outputPath }));
 

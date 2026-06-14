@@ -6,7 +6,14 @@
  * needing word-level timestamps (an upgrade path via ElevenLabs timestamps).
  */
 
+import type { VoiceAlignment } from "@/lib/elevenlabs";
 import type { RenderScene } from "./types";
+
+export interface TimedWord {
+  text: string;
+  start: number;
+  end: number;
+}
 
 /** Seconds → "HH:MM:SS,mmm" (SRT timecode). */
 export function secondsToSrtTime(seconds: number): string {
@@ -42,5 +49,62 @@ export function buildSrt(scenes: RenderScene[], totalDuration: number): string {
     t = end;
   });
 
+  return cues.join("\n\n") + "\n";
+}
+
+/**
+ * Pure: collapse ElevenLabs per-character alignment into per-word timings.
+ * A word starts at its first non-space character and ends at its last.
+ */
+export function parseAlignment(alignment: VoiceAlignment | null | undefined): TimedWord[] {
+  const chars = alignment?.characters;
+  if (!chars || chars.length === 0) return [];
+  const starts = alignment!.character_start_times_seconds ?? [];
+  const ends = alignment!.character_end_times_seconds ?? [];
+
+  const words: TimedWord[] = [];
+  let text = "";
+  let start = 0;
+  let end = 0;
+  let open = false;
+
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const s = starts[i] ?? end;
+    const e = ends[i] ?? s;
+    if (/\s/.test(ch)) {
+      if (open && text.trim()) words.push({ text: text.trim(), start, end });
+      text = "";
+      open = false;
+    } else {
+      if (!open) {
+        start = s;
+        open = true;
+      }
+      text += ch;
+      end = e;
+    }
+  }
+  if (open && text.trim()) words.push({ text: text.trim(), start, end });
+  return words;
+}
+
+/**
+ * Pure: word-synced (karaoke) SRT — groups words into short cues of up to
+ * maxWordsPerCue, each timed to its words' actual spoken start/end.
+ */
+export function wordsToSrt(words: TimedWord[], opts: { maxWordsPerCue?: number } = {}): string {
+  const max = Math.max(1, opts.maxWordsPerCue ?? 4);
+  if (words.length === 0) return "";
+
+  const cues: string[] = [];
+  for (let i = 0; i < words.length; i += max) {
+    const chunk = words.slice(i, i + max);
+    cues.push(
+      `${cues.length + 1}\n${secondsToSrtTime(chunk[0].start)} --> ${secondsToSrtTime(
+        chunk[chunk.length - 1].end
+      )}\n${chunk.map((w) => w.text).join(" ")}`
+    );
+  }
   return cues.join("\n\n") + "\n";
 }
