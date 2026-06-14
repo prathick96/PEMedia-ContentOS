@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ApprovalAction, ApprovalStatus } from "@/lib/approvals";
 import { getValidAccessToken, uploadVideo } from "@/lib/youtube";
+import { checkChannelCadence } from "@/lib/scheduling/cadence";
 
 export type PublishPrivacy = "private" | "unlisted" | "public";
 
@@ -83,6 +84,18 @@ export async function publishApprovedVideo(
   const channelId = video.series?.channels?.id;
   if (!channelId) {
     throw new Error(`Video ${videoId} has no linked channel — cannot resolve YouTube credentials.`);
+  }
+
+  // Cadence guard applies only to going LIVE: never two public posts within 18h
+  // on the same channel, max 2/week. Private/unlisted staging is exempt (not live).
+  if (privacy === "public") {
+    const cadence = await checkChannelCadence(db, channelId);
+    if (!cadence.allowed) {
+      throw new Error(
+        `Cadence guard blocked publish: ${cadence.reason}` +
+          (cadence.nextAllowedAt ? ` Next allowed at ${cadence.nextAllowedAt}.` : "")
+      );
+    }
   }
 
   const accessToken = await getValidAccessToken(db, channelId);
