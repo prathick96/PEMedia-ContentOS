@@ -1,4 +1,5 @@
 import { Header } from "@/components/dashboard/Header";
+import { PipelineRunner } from "@/components/dashboard/PipelineRunner";
 import { getPipelineVideos, type VideoWithContext } from "@/lib/db/queries";
 import type { VideoStatus } from "@/lib/db/schema";
 import { formatRelativeTime } from "@/lib/utils";
@@ -44,6 +45,7 @@ export default async function PipelinePage() {
     <div>
       <Header title="Content Pipeline" subtitle="Video production status across all channels" />
       <div className="p-6">
+        <PipelineRunner />
         <div className="flex gap-3 overflow-x-auto pb-4">
           {byStage.map((stage) => (
             <div key={stage.id} className="flex-none w-52">
