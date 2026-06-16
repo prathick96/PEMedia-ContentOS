@@ -116,8 +116,12 @@ Originality notes: ${gate.dimensions.reasoning}
 
 Produce both the long-form script and the 9:16 short_cut. Output valid JSON only.`;
 
+    // The full package (long-form + short cut + voice/visual/thumbnail prompts) is
+    // large. generateText streams, so this is safe up to the model cap (Sonnet 64K);
+    // 32K gives ample headroom for longer scripts. It's a ceiling — we're billed
+    // only for tokens actually generated, so the larger budget costs nothing extra.
     const script = ensureTtsNarration(
-      parseJsonResponse<VideoScript>(await this.callClaude(prompt, { maxTokens: 8192 }))
+      parseJsonResponse<VideoScript>(await this.callClaude(prompt, { maxTokens: 32000 }))
     );
 
     // ── Step 4: Resolve the 1-in-5 cross-promo for this channel's short ────────
