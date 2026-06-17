@@ -90,6 +90,25 @@ export function parseAlignment(alignment: VoiceAlignment | null | undefined): Ti
 }
 
 /**
+ * Pure: merge per-chunk word timings into one timeline. Each chunk's timings are
+ * local (start near 0); every word in chunk i is shifted by the summed durations of
+ * chunks 0..i-1, so the words line up with the concatenated audio.
+ */
+export function mergeTimedChunks(
+  chunks: { words: TimedWord[]; duration: number }[]
+): TimedWord[] {
+  const out: TimedWord[] = [];
+  let offset = 0;
+  for (const chunk of chunks) {
+    for (const w of chunk.words) {
+      out.push({ text: w.text, start: w.start + offset, end: w.end + offset });
+    }
+    offset += chunk.duration;
+  }
+  return out;
+}
+
+/**
  * Pure: word-synced (karaoke) SRT — groups words into short cues of up to
  * maxWordsPerCue, each timed to its words' actual spoken start/end.
  */

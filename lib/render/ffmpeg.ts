@@ -86,6 +86,20 @@ export function buildConcatListContent(clipPaths: string[]): string {
   return clipPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n";
 }
 
+export interface AudioConcatInput {
+  concatListPath: string;
+  outputPath: string;
+}
+
+/**
+ * Pure: ffmpeg argv to concatenate same-codec MP3 chunks losslessly via the concat
+ * demuxer (-c copy). Used to join the per-chunk narration produced when a long
+ * script is split under ElevenLabs' 10k-char per-request limit.
+ */
+export function buildAudioConcatArgs({ concatListPath, outputPath }: AudioConcatInput): string[] {
+  return ["-y", "-f", "concat", "-safe", "0", "-i", concatListPath, "-c", "copy", outputPath];
+}
+
 export interface BrollFinalInput {
   concatListPath: string;
   audioPath: string;

@@ -8,6 +8,13 @@ export interface VoiceGenerationOptions {
   modelId?: string;
   stability?: number;
   similarityBoost?: number;
+  /**
+   * Continuity hints for request stitching. When a long narration is split into
+   * sub-limit chunks, pass the adjacent chunk text so ElevenLabs keeps intonation
+   * and pacing continuous across the seam (no audible restart between chunks).
+   */
+  previousText?: string;
+  nextText?: string;
 }
 
 export async function generateVoice(opts: VoiceGenerationOptions): Promise<Buffer> {
@@ -29,6 +36,8 @@ export async function generateVoice(opts: VoiceGenerationOptions): Promise<Buffe
           stability: opts.stability ?? 0.5,
           similarity_boost: opts.similarityBoost ?? 0.75,
         },
+        ...(opts.previousText ? { previous_text: opts.previousText } : {}),
+        ...(opts.nextText ? { next_text: opts.nextText } : {}),
       }),
     }
   );
@@ -77,6 +86,8 @@ export async function generateVoiceWithTimestamps(
           stability: opts.stability ?? 0.5,
           similarity_boost: opts.similarityBoost ?? 0.75,
         },
+        ...(opts.previousText ? { previous_text: opts.previousText } : {}),
+        ...(opts.nextText ? { next_text: opts.nextText } : {}),
       }),
     }
   );

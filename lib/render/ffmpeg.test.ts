@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAudioConcatArgs,
   buildBrollFinalArgs,
   buildConcatListContent,
   buildImageClipArgs,
@@ -78,6 +79,16 @@ describe("buildConcatListContent", () => {
     const content = buildConcatListContent(["/t/a.mp4", "/t/b's.mp4"]);
     expect(content).toContain("file '/t/a.mp4'");
     expect(content).toContain("file '/t/b'\\''s.mp4'");
+  });
+});
+
+describe("buildAudioConcatArgs", () => {
+  const args = buildAudioConcatArgs({ concatListPath: "/t/list.txt", outputPath: "/t/out.mp3" });
+  it("concatenates via the demuxer with a stream copy (lossless)", () => {
+    expect(args).toContain("concat");
+    expect(args[args.indexOf("-i") + 1]).toBe("/t/list.txt");
+    expect(args[args.indexOf("-c") + 1]).toBe("copy");
+    expect(args[args.length - 1]).toBe("/t/out.mp3");
   });
 });
 

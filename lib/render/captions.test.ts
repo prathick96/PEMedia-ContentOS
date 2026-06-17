@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { VoiceAlignment } from "@/lib/elevenlabs";
 import type { RenderScene } from "./types";
-import { buildSrt, parseAlignment, secondsToSrtTime, wordsToSrt } from "./captions";
+import { buildSrt, mergeTimedChunks, parseAlignment, secondsToSrtTime, wordsToSrt } from "./captions";
 
 describe("secondsToSrtTime", () => {
   it("formats HH:MM:SS,mmm", () => {
@@ -64,6 +64,31 @@ describe("parseAlignment", () => {
   it("returns [] for missing/empty alignment", () => {
     expect(parseAlignment(null)).toEqual([]);
     expect(parseAlignment({ characters: [], character_start_times_seconds: [], character_end_times_seconds: [] })).toEqual([]);
+  });
+});
+
+describe("mergeTimedChunks", () => {
+  it("offsets each chunk's words by the preceding chunks' durations", () => {
+    const merged = mergeTimedChunks([
+      { words: [{ text: "a", start: 0, end: 0.5 }, { text: "b", start: 0.5, end: 1 }], duration: 1.2 },
+      { words: [{ text: "c", start: 0, end: 0.4 }], duration: 0.6 },
+      { words: [{ text: "d", start: 0.1, end: 0.5 }], duration: 0.5 },
+    ]);
+    expect(merged).toEqual([
+      { text: "a", start: 0, end: 0.5 },
+      { text: "b", start: 0.5, end: 1 },
+      { text: "c", start: 1.2, end: 1.6 }, // offset by chunk 0's duration (1.2)
+      { text: "d", start: 1.9, end: 2.3 }, // offset by 1.2 + 0.6
+    ]);
+  });
+
+  it("is a no-op for a single chunk", () => {
+    const words = [{ text: "x", start: 0, end: 0.3 }];
+    expect(mergeTimedChunks([{ words, duration: 0.5 }])).toEqual(words);
+  });
+
+  it("returns [] for no chunks", () => {
+    expect(mergeTimedChunks([])).toEqual([]);
   });
 });
 

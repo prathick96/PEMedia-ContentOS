@@ -15,8 +15,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortCut, VideoScript } from "@/lib/db/schema";
 import { buildRenderPlan, buildShortRenderPlan } from "./plan";
 import { computeSceneDurations } from "./plan";
-import { buildSrt, wordsToSrt, type TimedWord } from "./captions";
+import { buildSrt, mergeTimedChunks, wordsToSrt, type TimedWord } from "./captions";
 import {
+  buildAudioConcatArgs,
   buildBrollFinalArgs,
   buildConcatListContent,
   buildImageClipArgs,
@@ -25,7 +26,11 @@ import {
   runFfmpeg,
 } from "./ffmpeg";
 import { buildPexelsQuery, downloadToFile, fetchScenePhotos, photoUrl, pickBestPhoto } from "./visuals";
-import { synthesizeNarration, synthesizeNarrationTimed } from "./voice";
+import {
+  synthesizeNarrationChunks,
+  synthesizeNarrationTimedChunks,
+  type NarrationChunk,
+} from "./voice";
 import { generateThumbnail } from "./thumbnail";
 import type { Aspect, RenderOptions, RenderPlan, RenderResult } from "./types";
 
@@ -37,24 +42,41 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
   const srtPath = join(dir, `captions-${stamp}.srt`);
   const outputPath = join(dir, `video-${stamp}.mp4`);
 
-  // Prefer word-synced captions (ElevenLabs timestamps). Fall back to plain TTS +
-  // proportional scene captions if the timestamped call is unavailable.
-  let audio: Buffer;
-  let words: TimedWord[] = [];
+  // Synthesize narration. Long scripts exceed ElevenLabs' 10k-char per-request
+  // limit, so voice.* splits on sentence boundaries into sub-limit chunks; here we
+  // concatenate the chunk audio losslessly and stitch the per-chunk word timings
+  // into one timeline. Prefer word-synced (timestamped) captions; fall back to
+  // plain TTS + proportional scene captions if the timestamped call is unavailable.
+  let timedChunks: NarrationChunk[] | null = null;
+  let chunkAudios: Buffer[];
   try {
-    const timed = await synthesizeNarrationTimed(plan.narration, opts);
-    audio = timed.audio;
-    words = timed.words;
+    timedChunks = await synthesizeNarrationTimedChunks(plan.narration, opts);
+    chunkAudios = timedChunks.map((c) => c.audio);
   } catch (err) {
     console.warn(
       "[render] timestamped TTS failed, falling back to plain TTS:",
       err instanceof Error ? err.message : err
     );
-    audio = await synthesizeNarration(plan.narration, opts);
+    chunkAudios = await synthesizeNarrationChunks(plan.narration, opts);
   }
-  await writeFile(audioPath, audio);
 
+  const chunkPaths = await writeNarrationAudio(chunkAudios, audioPath, dir, stamp);
   const durationSecs = await probeDurationSecs(audioPath);
+
+  // Word timings: offset each chunk's local timings by the preceding chunks' real
+  // (probed) durations so captions line up with the concatenated audio.
+  let words: TimedWord[] = [];
+  if (timedChunks) {
+    if (timedChunks.length === 1) {
+      words = timedChunks[0].words;
+    } else {
+      const durations = await Promise.all(chunkPaths.map((p) => probeDurationSecs(p)));
+      words = mergeTimedChunks(
+        timedChunks.map((c, i) => ({ words: c.words, duration: durations[i] }))
+      );
+    }
+  }
+
   const srt = words.length > 0 ? wordsToSrt(words) : buildSrt(plan.scenes, durationSecs);
   await writeFile(srtPath, srt, "utf8");
 
@@ -83,6 +105,38 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
     height: plan.height,
     sceneCount: plan.scenes.length,
   };
+}
+
+/**
+ * Persist narration chunk audio to `audioPath` and return the per-chunk file paths
+ * (used to probe per-chunk durations for caption stitching).
+ *
+ * - 1 chunk  → written straight to audioPath (no ffmpeg needed).
+ * - N chunks → each written to its own mp3, then concatenated losslessly into
+ *   audioPath via the ffmpeg concat demuxer (-c copy; all chunks share a codec).
+ */
+async function writeNarrationAudio(
+  chunkAudios: Buffer[],
+  audioPath: string,
+  dir: string,
+  stamp: number
+): Promise<string[]> {
+  if (chunkAudios.length === 1) {
+    await writeFile(audioPath, chunkAudios[0]);
+    return [audioPath];
+  }
+
+  const chunkPaths: string[] = [];
+  for (let i = 0; i < chunkAudios.length; i++) {
+    const p = join(dir, `narration-${stamp}-${i}.mp3`);
+    await writeFile(p, chunkAudios[i]);
+    chunkPaths.push(p);
+  }
+
+  const listPath = join(dir, `narration-concat-${stamp}.txt`);
+  await writeFile(listPath, buildConcatListContent(chunkPaths), "utf8");
+  await runFfmpeg(buildAudioConcatArgs({ concatListPath: listPath, outputPath: audioPath }));
+  return chunkPaths;
 }
 
 /** Assemble the video from per-scene Pexels stills timed to the narration. */
