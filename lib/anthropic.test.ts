@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseJsonResponse } from "./anthropic";
+import { isTransientStreamError, parseJsonResponse } from "./anthropic";
 
 describe("parseJsonResponse", () => {
   it("parses clean JSON objects", () => {
@@ -32,5 +32,37 @@ describe("parseJsonResponse", () => {
 
   it("throws when no JSON exists", () => {
     expect(() => parseJsonResponse("no json here at all")).toThrow(/No JSON found/);
+  });
+});
+
+describe("isTransientStreamError", () => {
+  it("treats a mid-stream disconnect (undici 'terminated') as transient", () => {
+    expect(isTransientStreamError(new TypeError("terminated"))).toBe(true);
+  });
+
+  it("treats socket/DNS resets as transient", () => {
+    expect(isTransientStreamError(new Error("read ECONNRESET"))).toBe(true);
+    expect(isTransientStreamError({ code: "ENOTFOUND", message: "getaddrinfo" })).toBe(true);
+    expect(isTransientStreamError(new Error("fetch failed"))).toBe(true);
+    expect(isTransientStreamError({ message: "Connection error." })).toBe(true);
+  });
+
+  it("treats 408/429/5xx statuses as transient", () => {
+    expect(isTransientStreamError({ status: 408 })).toBe(true);
+    expect(isTransientStreamError({ status: 429 })).toBe(true);
+    expect(isTransientStreamError({ status: 503 })).toBe(true);
+  });
+
+  it("does NOT retry deterministic faults", () => {
+    expect(
+      isTransientStreamError(new Error("Claude response truncated at the max_tokens limit (32000)"))
+    ).toBe(false);
+    expect(isTransientStreamError(new Error("Unexpected response type from Claude"))).toBe(false);
+    expect(isTransientStreamError({ status: 400, message: "invalid_request_error" })).toBe(false);
+  });
+
+  it("is false for null/undefined", () => {
+    expect(isTransientStreamError(null)).toBe(false);
+    expect(isTransientStreamError(undefined)).toBe(false);
   });
 });
