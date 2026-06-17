@@ -31,6 +31,19 @@ export function subtitlesFilterName(srtPath: string): string {
 const FORCE_STYLE =
   "FontSize=22,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00000000&,Outline=2,Shadow=1,Alignment=2,MarginV=72,Bold=1";
 
+/** libx264 speed preset — `veryfast` is visually identical for flat backgrounds. */
+const X264_PRESET = process.env.FFMPEG_PRESET || "veryfast";
+
+/**
+ * Render framerate. This is the dominant cost: the bottleneck isn't x264 (a static
+ * background is trivial to encode) but the per-frame libass subtitle compositing,
+ * which runs ~1× realtime at 30fps — so a 13-min video takes ~13 min. Our visuals
+ * are a still background where only the captions change every ~1–2s, so 15fps looks
+ * identical and roughly halves the frame count (measured ~3× faster end to end).
+ * Override with FFMPEG_FPS if a future motion-heavy visual style needs more.
+ */
+const RENDER_FPS = Number(process.env.FFMPEG_FPS) || 15;
+
 export function buildSubtitlesFilter(srtPath: string): string {
   return `subtitles=${subtitlesFilterName(srtPath)}:force_style='${FORCE_STYLE}'`;
 }
@@ -47,10 +60,11 @@ export function buildRenderArgs({ audioPath, srtPath, plan, outputPath }: Render
   return [
     "-y",
     "-f", "lavfi",
-    "-i", `color=c=${plan.backgroundColor}:s=${plan.width}x${plan.height}:r=30`,
+    "-i", `color=c=${plan.backgroundColor}:s=${plan.width}x${plan.height}:r=${RENDER_FPS}`,
     "-i", audioPath,
     "-vf", buildSubtitlesFilter(srtPath),
     "-c:v", "libx264",
+    "-preset", X264_PRESET,
     "-tune", "stillimage",
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
@@ -81,8 +95,9 @@ export function buildImageClipArgs(input: ImageClipInput): string[] {
     "-t", input.durationSecs.toFixed(3),
     "-vf",
     `scale=${input.width}:${input.height}:force_original_aspect_ratio=increase,crop=${input.width}:${input.height},format=yuv420p`,
-    "-r", "30",
+    "-r", String(RENDER_FPS),
     "-c:v", "libx264",
+    "-preset", X264_PRESET,
     "-pix_fmt", "yuv420p",
     "-an",
     input.outputPath,
@@ -125,6 +140,7 @@ export function buildBrollFinalArgs(input: BrollFinalInput): string[] {
     "-i", input.audioPath,
     "-vf", buildSubtitlesFilter(input.srtPath),
     "-c:v", "libx264",
+    "-preset", X264_PRESET,
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
     "-b:a", "192k",

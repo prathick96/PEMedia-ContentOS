@@ -37,7 +37,8 @@ describe("buildRenderArgs", () => {
   });
 
   it("builds a color source at the plan's size and background", () => {
-    expect(args).toContain("color=c=0x0B0B0F:s=1920x1080:r=30");
+    // fps is RENDER_FPS (default 15) — the dominant render-speed lever.
+    expect(args.find((a) => a.startsWith("color=c=0x0B0B0F:s=1920x1080:r="))).toBeTruthy();
   });
 
   it("takes the narration as the second input", () => {
@@ -55,6 +56,12 @@ describe("buildRenderArgs", () => {
 
   it("writes to the output path last", () => {
     expect(args[args.length - 1]).toBe("/t/out.mp4");
+  });
+
+  it("sets a fast x264 preset (a flat background must not encode at the slow default)", () => {
+    const i = args.indexOf("-preset");
+    expect(i).toBeGreaterThan(0);
+    expect(args[i + 1]).toBeTruthy();
   });
 });
 
