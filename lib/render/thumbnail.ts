@@ -15,7 +15,7 @@ import { join } from "path";
 import type { ThumbnailConcept } from "@/lib/db/schema";
 import { normalizeColor } from "./plan";
 import { secondsToSrtTime } from "./captions";
-import { escapeSubtitlesPath, runFfmpeg } from "./ffmpeg";
+import { runFfmpeg, subtitlesFilterName } from "./ffmpeg";
 
 export interface ThumbnailOptions {
   width?: number;
@@ -47,7 +47,7 @@ export function buildThumbnailArgs(input: ThumbnailArgsInput): string[] {
     "-y",
     "-f", "lavfi",
     "-i", `color=c=${input.backgroundColor}:s=${input.width}x${input.height}`,
-    "-vf", `subtitles=${escapeSubtitlesPath(input.srtPath)}:force_style='${THUMB_STYLE}'`,
+    "-vf", `subtitles=${subtitlesFilterName(input.srtPath)}:force_style='${THUMB_STYLE}'`,
     "-frames:v", "1",
     input.outputPath,
   ];
@@ -72,6 +72,7 @@ export async function generateThumbnail(
   const outputPath = join(dir, `thumb-${stamp}.png`);
 
   await writeFile(srtPath, `1\n${secondsToSrtTime(0)} --> ${secondsToSrtTime(5)}\n${text}\n`, "utf8");
-  await runFfmpeg(buildThumbnailArgs({ srtPath, outputPath, width, height, backgroundColor }));
+  // cwd = dir so the subtitles filter resolves the SRT by bare filename.
+  await runFfmpeg(buildThumbnailArgs({ srtPath, outputPath, width, height, backgroundColor }), { cwd: dir });
   return outputPath;
 }

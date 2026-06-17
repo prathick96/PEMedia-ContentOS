@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { join } from "path";
 import {
   buildAudioConcatArgs,
   buildBrollFinalArgs,
@@ -6,22 +7,22 @@ import {
   buildImageClipArgs,
   buildRenderArgs,
   buildSubtitlesFilter,
-  escapeSubtitlesPath,
+  subtitlesFilterName,
 } from "./ffmpeg";
 
-describe("escapeSubtitlesPath", () => {
-  it("converts backslashes to slashes and escapes the drive colon (Windows)", () => {
-    expect(escapeSubtitlesPath("C:\\Users\\a\\captions.srt")).toBe("C\\:/Users/a/captions.srt");
+describe("subtitlesFilterName", () => {
+  it("reduces a path to its bare filename (no drive colon reaches the filtergraph)", () => {
+    expect(subtitlesFilterName(join("any", "dir", "captions.srt"))).toBe("captions.srt");
   });
-  it("leaves a posix path's slashes but still escapes colons", () => {
-    expect(escapeSubtitlesPath("/tmp/pemedia/captions.srt")).toBe("/tmp/pemedia/captions.srt");
+  it("escapes single quotes in the filename", () => {
+    expect(subtitlesFilterName(join("t", "a'b.srt"))).toBe("a\\'b.srt");
   });
 });
 
 describe("buildSubtitlesFilter", () => {
-  it("references the escaped path and a quoted force_style", () => {
-    const f = buildSubtitlesFilter("C:\\x\\c.srt");
-    expect(f.startsWith("subtitles=C\\:/x/c.srt:force_style='")).toBe(true);
+  it("references the bare srt filename and a quoted force_style", () => {
+    const f = buildSubtitlesFilter(join("x", "c.srt"));
+    expect(f.startsWith("subtitles=c.srt:force_style='")).toBe(true);
     expect(f).toContain("Alignment=2");
     expect(f.endsWith("'")).toBe(true);
   });

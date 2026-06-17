@@ -10,21 +10,29 @@
  */
 
 import { spawn } from "child_process";
+import { basename } from "path";
 import type { RenderPlan } from "./types";
 
 /**
- * Escape a path for the subtitles filter. libass on Windows needs backslashes
- * turned into forward slashes and the drive-letter colon escaped.
+ * The value for the subtitles filter. We pass the SRT's BARE FILENAME and run
+ * ffmpeg with cwd set to the render directory (see runFfmpeg's cwd option), so no
+ * Windows drive-letter colon or backslash ever reaches the filtergraph.
+ *
+ * Escaping `C:\…` inside the subtitles filter is notoriously fragile and varies by
+ * ffmpeg version: a single-backslash colon (`C\:/…`) makes newer ffmpeg (libass)
+ * split on the colon and try to read the path tail as the `original_size` option —
+ * "Unable to parse 'original_size' option value … as image size". The bare filename
+ * sidesteps the whole escaping problem. Only `'` needs escaping in a filename.
  */
-export function escapeSubtitlesPath(p: string): string {
-  return p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+export function subtitlesFilterName(srtPath: string): string {
+  return basename(srtPath).replace(/'/g, "\\'");
 }
 
 const FORCE_STYLE =
   "FontSize=22,PrimaryColour=&H00FFFFFF&,OutlineColour=&H00000000&,Outline=2,Shadow=1,Alignment=2,MarginV=72,Bold=1";
 
 export function buildSubtitlesFilter(srtPath: string): string {
-  return `subtitles=${escapeSubtitlesPath(srtPath)}:force_style='${FORCE_STYLE}'`;
+  return `subtitles=${subtitlesFilterName(srtPath)}:force_style='${FORCE_STYLE}'`;
 }
 
 export interface RenderArgsInput {
@@ -125,9 +133,18 @@ export function buildBrollFinalArgs(input: BrollFinalInput): string[] {
   ];
 }
 
+export interface FfmpegRunOptions {
+  /**
+   * Working directory for the process. Set to the render dir so the subtitles
+   * filter can reference the SRT by bare filename (see subtitlesFilterName) —
+   * this is what keeps Windows path escaping out of the filtergraph entirely.
+   */
+  cwd?: string;
+}
+
 /** Run ffmpeg with the given args. Rejects with stderr tail on non-zero exit. */
-export function runFfmpeg(args: string[]): Promise<void> {
-  return runBinary("ffmpeg", args).then(() => undefined);
+export function runFfmpeg(args: string[], opts: FfmpegRunOptions = {}): Promise<void> {
+  return runBinary("ffmpeg", args, opts).then(() => undefined);
 }
 
 /** Probe a media file's duration in seconds via ffprobe. */
@@ -145,9 +162,9 @@ export async function probeDurationSecs(path: string): Promise<number> {
   return secs;
 }
 
-function runBinary(bin: string, args: string[]): Promise<string> {
+function runBinary(bin: string, args: string[], opts: FfmpegRunOptions = {}): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args);
+    const child = spawn(bin, args, opts.cwd ? { cwd: opts.cwd } : {});
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d.toString()));

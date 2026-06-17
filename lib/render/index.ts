@@ -95,7 +95,8 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
     }
   }
   if (!assembled) {
-    await runFfmpeg(buildRenderArgs({ audioPath, srtPath, plan, outputPath }));
+    // cwd = dir so the subtitles filter resolves the SRT by bare filename.
+    await runFfmpeg(buildRenderArgs({ audioPath, srtPath, plan, outputPath }), { cwd: dir });
   }
 
   return {
@@ -179,7 +180,8 @@ async function renderBrollVideo(args: {
 
   const concatListPath = join(dir, `concat-${stamp}.txt`);
   await writeFile(concatListPath, buildConcatListContent(clipPaths), "utf8");
-  await runFfmpeg(buildBrollFinalArgs({ concatListPath, audioPath, srtPath, outputPath }));
+  // cwd = dir so the subtitles filter resolves the SRT by bare filename.
+  await runFfmpeg(buildBrollFinalArgs({ concatListPath, audioPath, srtPath, outputPath }), { cwd: dir });
 }
 
 function withVoiceSettings(opts: RenderOptions, script: VideoScript): RenderOptions {
