@@ -147,8 +147,19 @@ export async function* runFullPipeline(opts: FullRunOptions = {}): AsyncGenerato
     return;
   }
   const quality = prod.data?.quality as { score?: number } | undefined;
-  yield ev("production", "done", `Script ready${quality?.score != null ? ` (gate ${quality.score}/100)` : ""}`, {
+  const reframed = prod.data?.reframed === true;
+  const finalTopic = prod.data?.topic as string | undefined;
+  const attempts = prod.data?.refine_attempts as number | undefined;
+  const gateNote = quality?.score != null ? ` (gate ${quality.score}/100)` : "";
+  const detail =
+    reframed && finalTopic
+      ? `Reframed after ${attempts ?? "?"} tries → "${finalTopic}"${gateNote}`
+      : `Script ready${gateNote}`;
+  yield ev("production", "done", detail, {
     video_id: videoId,
+    topic: finalTopic,
+    reframed,
+    refine_attempts: attempts,
   });
 
   // ── 5. Render — non-fatal (QA reviews the script even if media isn't set up) ─

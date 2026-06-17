@@ -1,5 +1,5 @@
 import { BaseAgent, type AgentInput } from "./base";
-import { scoreTopicQuality } from "@/lib/quality-gate";
+import { refineTopicUntilPass, summariseAttempts } from "@/lib/quality-gate/refine";
 import { parseJsonResponse } from "@/lib/anthropic";
 import { ensureTtsNarration } from "./script-utils";
 import { buildDistributionPlan, buildShortNarration, shouldCrossPromote } from "./distribution";
@@ -81,32 +81,45 @@ CRAFT RULES — this is what separates a retained viewer from a swipe:
       .eq("id", series_id)
       .single();
 
-    // ── Step 2: Quality / Originality Gate ───────────────────────────────────
-    // Runs BEFORE any script generation or video row creation.
-    // A failed gate throws and the job is marked failed — no credits wasted.
+    // ── Step 2: Quality Gate WITH regeneration loop ──────────────────────────
+    // Runs BEFORE any script generation or video row creation. A failing topic
+    // isn't a dead end: the gate's own reasoning + recommendations are fed to the
+    // Topic Editor, which reframes to a sharper angle, then re-scores — bounded by
+    // maxAttempts. The threshold never moves; this raises the quality of what gets
+    // produced, it doesn't lower the bar. Only a topic that PASSES proceeds.
     const channel = series?.channels as Record<string, unknown> | null;
     const nicheSlug =
       (channel?.niches as Record<string, unknown> | null)?.slug as string ?? "tech";
 
-    const gate = await scoreTopicQuality({
+    const refinement = await refineTopicUntilPass({
       topic: topic as string,
       niche: nicheSlug,
       series_context: series?.episode_template ?? "",
       series_id: series_id as string | undefined,
       db: this.db,
+      maxAttempts: 3,
     });
 
-    if (!gate.passed) {
+    if (!refinement.passed) {
+      const v = refinement.verdict;
       throw new Error(
-        `Quality gate FAILED (score ${gate.score}/100) — ${gate.reasons.join("; ")}` +
-          (gate.dimensions.recommendations.length > 0
-            ? ` | Suggestions: ${gate.dimensions.recommendations.slice(0, 2).join("; ")}`
-            : "")
+        `Quality gate FAILED after ${refinement.attempts.length} attempt(s) — best ${v.score}/100. ` +
+          `${v.reasons.join("; ")}` +
+          (v.dimensions.recommendations.length > 0
+            ? ` | Try: ${v.dimensions.recommendations.slice(0, 2).join("; ")}`
+            : "") +
+          ` | Trail: ${summariseAttempts(refinement.attempts)}`
       );
     }
 
+    // The topic that actually passed — may be a reframe of the original. Everything
+    // downstream (script, rows, titles) is built from this, not the original input.
+    const productionTopic = refinement.topic;
+    const gate = refinement.verdict;
+    const wasReframed = productionTopic !== (topic as string);
+
     // ── Step 3: Generate the full long-form + short package ───────────────────
-    const prompt = `Write the complete production package for the topic: "${topic}"
+    const prompt = `Write the complete production package for the topic: "${productionTopic}"
 Series: ${series?.name ?? "Unknown"}
 Series format/template: ${series?.episode_template ?? "Standard explainer"}
 Channel brand (name, voice, colors, persona): ${JSON.stringify(channel ?? {})}
@@ -146,10 +159,10 @@ Produce both the long-form script and the 9:16 short_cut. Output valid JSON only
       .from("videos")
       .insert({
         series_id,
-        topic: topic as string,
+        topic: productionTopic,
         status: "SCRIPT_DONE",
         script,
-        title: script.title_options?.[0] ?? (topic as string),
+        title: script.title_options?.[0] ?? productionTopic,
         description: script.description,
         tags: script.tags ?? [],
         chapters: script.chapters ?? [],
@@ -165,13 +178,18 @@ Produce both the long-form script and the 9:16 short_cut. Output valid JSON only
       crossPromote,
       seriesId: series_id as string,
       parentVideoId: video?.id as string | undefined,
-      topic: topic as string,
+      topic: productionTopic,
     });
 
     return {
       video_id: video?.id,
       short_video_id: short.id,
       script,
+      // Topic provenance — the original input vs. what actually got produced.
+      topic: productionTopic,
+      original_topic: topic as string,
+      reframed: wasReframed,
+      refine_attempts: refinement.attempts.length,
       cross_promo_youtube: crossPromote,
       distribution: buildDistributionPlan(crossPromote),
       next_step: "voice_generation",
