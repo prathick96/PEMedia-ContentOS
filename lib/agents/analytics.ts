@@ -1,4 +1,5 @@
 import { BaseAgent, type AgentInput } from "./base";
+import { parseJsonResponse } from "@/lib/anthropic";
 
 export class AnalyticsAgent extends BaseAgent {
   readonly type = "analytics" as const;
@@ -51,6 +52,6 @@ Revenue entries (last 30 days): ${JSON.stringify(revenue ?? [])}
 Output valid JSON only.`;
 
     const response = await this.callClaude(prompt);
-    return JSON.parse(response);
+    return parseJsonResponse<Record<string, unknown>>(response);
   }
 }

@@ -1,5 +1,6 @@
 import { BaseAgent, type AgentInput } from "./base";
 import { requireApproval } from "@/lib/approvals";
+import { parseJsonResponse } from "@/lib/anthropic";
 
 export class PublisherAgent extends BaseAgent {
   readonly type = "publisher" as const;
@@ -22,7 +23,9 @@ Output valid JSON:
   "scheduled_at": string (ISO, randomised ±90min from optimal window),
   "platform_specific": {
     "youtube": { "category_id": string, "made_for_kids": false, "ai_disclosure": boolean },
-    "tiktok": { "hashtags": string[], "ai_generated_label": boolean }
+    "tiktok": { "hashtags": string[], "ai_generated_label": boolean },
+    "instagram": { "hashtags": string[], "ai_disclosure": boolean },
+    "facebook": { "hashtags": string[], "ai_disclosure": boolean }
   }
 }`;
 
@@ -51,12 +54,20 @@ Description: ${video.description}
 Channel: ${JSON.stringify(video.series?.channels)}
 Output valid JSON only.`;
 
-    const optimised = JSON.parse(await this.callClaude(prompt));
+    const optimised = parseJsonResponse<Record<string, unknown> & {
+      platform_specific?: {
+        youtube?: Record<string, unknown>;
+        tiktok?: Record<string, unknown>;
+        instagram?: Record<string, unknown>;
+        facebook?: Record<string, unknown>;
+      };
+    }>(await this.callClaude(prompt));
     optimised.scheduled_at = scheduledAt.toISOString();
 
     // Compliance (Council Brief 001 §1.3): our videos use synthetic voice/visuals,
-    // so YouTube's AI-disclosure + TikTok's AI-label are MANDATORY. Force the flags
-    // ON regardless of model output — undisclosed synthetic media risks YPP suspension.
+    // so the AI-disclosure / AI-label on EVERY surface we cross-post to is MANDATORY.
+    // Force the flags ON regardless of model output — undisclosed synthetic media
+    // risks YPP suspension and removal on Meta/TikTok.
     optimised.platform_specific = optimised.platform_specific ?? {};
     optimised.platform_specific.youtube = {
       ...(optimised.platform_specific.youtube ?? {}),
@@ -66,6 +77,14 @@ Output valid JSON only.`;
     optimised.platform_specific.tiktok = {
       ...(optimised.platform_specific.tiktok ?? {}),
       ai_generated_label: true,
+    };
+    optimised.platform_specific.instagram = {
+      ...(optimised.platform_specific.instagram ?? {}),
+      ai_disclosure: true,
+    };
+    optimised.platform_specific.facebook = {
+      ...(optimised.platform_specific.facebook ?? {}),
+      ai_disclosure: true,
     };
 
     await this.db

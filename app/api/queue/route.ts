@@ -21,6 +21,7 @@ import { CeoAgent } from "@/lib/agents/ceo";
 import { ScoutAgent } from "@/lib/agents/scout";
 import { CreativeAgent } from "@/lib/agents/creative";
 import { ProductionAgent } from "@/lib/agents/production";
+import { QAReviewerAgent } from "@/lib/agents/qa-reviewer";
 import { PublisherAgent } from "@/lib/agents/publisher";
 import { AnalyticsAgent } from "@/lib/agents/analytics";
 
@@ -29,6 +30,7 @@ const AGENTS: Record<string, new () => BaseAgent> = {
   scout: ScoutAgent,
   creative: CreativeAgent,
   production: ProductionAgent,
+  qa: QAReviewerAgent,
   publisher: PublisherAgent,
   analytics: AnalyticsAgent,
 };

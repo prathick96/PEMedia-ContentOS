@@ -8,8 +8,8 @@
 
 - **Owner:** Solo operator (Prathick / prathick96)
 - **Goal:** Steady compounding growth — not viral spikes. Path to millionaire pace.
-- **Phase:** 0 (Dashboard shell + architecture foundation)
-- **Stack:** Next.js 16 + TypeScript + Tailwind + Supabase + BullMQ + Claude API
+- **Phase:** 1 (Dashboard live against Supabase; agents runnable from the UI; local-only, no auth yet)
+- **Stack:** Next.js 16 + TypeScript + Tailwind + Supabase + QStash + Claude API
 
 ---
 
@@ -89,10 +89,9 @@ Key tables:
 
 Copy `.env.example` to `.env.local` (git-ignored).
 
-**Phase 0 (current):** No env vars required — all static.  
-**Phase 1:** `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`  
-**Phase 2:** All YouTube OAuth vars, `ELEVENLABS_API_KEY`, `UPSTASH_REDIS_REST_URL`  
-**When funded:** `MUAPI_API_KEY`
+**Phase 1 (current):** `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`; optional for live trends: `YOUTUBE_API_KEY`, `REDDIT_USER_AGENT`  
+**Phase 2:** QStash keys + `CRON_ADMIN_SECRET` (deploy-time), Google OAuth vars, `ELEVENLABS_API_KEY`  
+**When funded:** `MUAPI_API_KEY`, `CREATOMATE_API_KEY`
 
 ---
 
@@ -117,22 +116,24 @@ Copy `.env.example` to `.env.local` (git-ignored).
 
 ---
 
-## Phase 0 Scope (Current)
+## Phase 1 Scope (Current — scaffold complete)
 
-**In scope:**
-- Dashboard shell: sidebar, header, layout
-- CEO overview page: static KPI cards + agent status panel
-- All dashboard pages with empty states + CTAs
-- Complete folder structure
-- All lib stubs (TypeScript interfaces, no implementation)
-- Supabase schema (written, not yet applied)
-- All agent API route stubs
+**Done in Phase 1** (see `docs/plans/phase-1-scaffold.md`):
+- All dashboard pages read live Supabase data via `lib/db/queries.ts` (server-side,
+  service-role client — RLS blocks the anon key; never ship the service key client-side)
+- Approvals page (human-in-the-loop queue) with approve/reject from the UI
+- Agents triggerable from the UI (Scout, CEO, Analytics; Creative from the Channels page)
+- Scout grounded in free live sources: Hacker News + Reddit public JSON + YouTube API
+  (`lib/trends/`), with model-only fallback flagged `claude_analysis`
+- All agents parse LLM output with `parseJsonResponse` (fence/prose tolerant)
+- Vitest unit tests (`npm test`) + GitHub Actions CI (typecheck/lint/test/build)
+- Supabase migrations 001–003 applied; niches seeded
 
-**Out of scope for Phase 0:**
-- Live API integrations
-- Running agents (stubs only)
-- Real data anywhere
-- Authentication flow (present but not wired)
+**Out of scope for Phase 1 (Phase 2+):**
+- Authentication — REQUIRED before any public deploy (see `docs/deploy/vercel.md`)
+- ElevenLabs voice, video assembly, thumbnails, uploads
+- YouTube/TikTok OAuth + publishing
+- Supabase Realtime live updates (refresh-based for now)
 
 ---
 
@@ -141,7 +142,7 @@ Copy `.env.example` to `.env.local` (git-ignored).
 1. Never use actual movie clips or sports footage — ContentID strikes kill channels
 2. Always add AI disclosure labels where platforms require them
 3. Never post two videos within 18 hours on the same channel
-4. Post via official APIs only: YouTube Data API v3, TikTok Content Posting API
+4. Post via official APIs only: YouTube Data API v3, TikTok Content Posting API, Meta Graph API (Instagram Reels + Facebook Pages)
 5. YouTube requires AI labels for synthetic content in news/health/electoral categories
 6. Only add paid services when revenue exists to fund them
 
