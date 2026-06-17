@@ -4,8 +4,15 @@ import { getChannelById } from "@/lib/db/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function ChannelDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ChannelDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ connected?: string; yt?: string; youtube_error?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const channel = await getChannelById(id);
 
   if (!channel) {
@@ -40,7 +47,26 @@ export default async function ChannelDetailPage({ params }: { params: Promise<{ 
               {channel.url} ↗
             </a>
           )}
+          <a
+            href={`/api/auth/youtube/connect?channel_id=${channel.id}`}
+            className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20"
+          >
+            ▶ Connect YouTube
+          </a>
         </div>
+
+        {sp.connected === "youtube" && (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-300">
+            ✓ Connected to YouTube{sp.yt ? ` as ${sp.yt}` : ""}. Autonomous upload is ready — uploads land
+            as private until the &ldquo;altered content&rdquo; disclosure is set in Studio.
+          </div>
+        )}
+        {sp.youtube_error && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+            YouTube connection failed: {sp.youtube_error}. Try again, or revoke access at
+            myaccount.google.com/permissions and reconnect.
+          </div>
+        )}
 
         {brand && (
           <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -52,7 +78,21 @@ export default async function ChannelDetailPage({ params }: { params: Promise<{ 
               </div>
               <div>
                 <div className="text-[10px] text-zinc-600 uppercase">Voice</div>
-                <div className="text-xs text-zinc-300 mt-1">{brand.brand_voice}</div>
+                {typeof brand.brand_voice === "string" ? (
+                  <div className="text-xs text-zinc-300 mt-1">{brand.brand_voice}</div>
+                ) : (
+                  <div className="text-xs text-zinc-300 mt-1 space-y-1">
+                    {brand.brand_voice.dos?.length > 0 && (
+                      <div><span className="text-emerald-400">Do:</span> {brand.brand_voice.dos.join(" · ")}</div>
+                    )}
+                    {brand.brand_voice.donts?.length > 0 && (
+                      <div><span className="text-rose-400">Don&apos;t:</span> {brand.brand_voice.donts.join(" · ")}</div>
+                    )}
+                    {brand.brand_voice.example_sentence && (
+                      <div className="text-zinc-400 italic">&ldquo;{brand.brand_voice.example_sentence}&rdquo;</div>
+                    )}
+                  </div>
+                )}
               </div>
               {brand.brand_colors && (
                 <div>

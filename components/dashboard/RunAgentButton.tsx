@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import type { AgentType } from "@/lib/db/schema";
 
 interface RunAgentButtonProps {
-  agent: "ceo" | "scout" | "creative" | "production" | "publisher" | "analytics";
+  agent: AgentType;
   /** Payload POSTed to /api/agents/<agent>. */
   input?: Record<string, unknown>;
   label?: string;

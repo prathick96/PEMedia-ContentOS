@@ -15,7 +15,8 @@ const AGENT_META: Record<string, { name: string; role: string; description: stri
   scout: { name: "Scout Agent", role: "Intelligence", description: "Trend monitoring" },
   creative: { name: "Creative Agent", role: "Brand", description: "Channel identity & series" },
   production: { name: "Production Agent", role: "Production", description: "Script → Video pipeline" },
-  publisher: { name: "Publisher Agent", role: "Publishing", description: "YouTube & TikTok upload" },
+  qa: { name: "QA Reviewer Agent", role: "Quality Gate", description: "Reviews finished package; gates publish" },
+  publisher: { name: "Publisher Agent", role: "Publishing", description: "YouTube upload & scheduling" },
   analytics: { name: "Analytics Agent", role: "Analytics", description: "Performance & revenue" },
 };
 
@@ -110,7 +111,7 @@ export default async function DashboardPage() {
           <h2 className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Agent Status</h2>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {agentStatuses.map(({ agent, lastJob }) => {
-              const meta = AGENT_META[agent];
+              const meta = AGENT_META[agent] ?? { name: agent, role: "Agent", description: "" };
               const badge = jobBadge(lastJob?.status);
               return (
                 <div key={agent} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">

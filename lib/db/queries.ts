@@ -23,7 +23,7 @@ import type {
 } from "./schema";
 import type { Approval } from "@/lib/approvals";
 
-const AGENT_TYPES: AgentType[] = ["ceo", "scout", "creative", "production", "publisher", "analytics"];
+const AGENT_TYPES: AgentType[] = ["ceo", "scout", "creative", "production", "qa", "publisher", "analytics"];
 
 async function safe<T>(fallback: T, label: string, fn: () => Promise<T>): Promise<T> {
   try {

@@ -57,6 +57,15 @@ const agents: AgentMeta[] = [
     runnable: false,
   },
   {
+    name: "QA Reviewer Agent",
+    id: "qa",
+    role: "Quality Gate",
+    description: "Reviews the finished package (script, narration, visuals, thumbnail, short). Scores 10 dimensions, enforces AI disclosure + copyright safety, and gates advancement to the Publisher.",
+    trigger: "Per produced video, before Publisher",
+    tools: ["Claude", "qa_review_results", "Approvals"],
+    runnable: false,
+  },
+  {
     name: "Publisher Agent",
     id: "publisher",
     role: "Distribution",
