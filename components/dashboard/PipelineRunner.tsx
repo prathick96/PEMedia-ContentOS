@@ -1,23 +1,21 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PIPELINE_STAGES,
+  reduceStageViews,
   type PipelineEvent,
-  type PipelineStageId,
   type StageStatus,
 } from "@/lib/pipeline/stages";
 
-interface StageState {
-  status: StageStatus;
-  detail?: string;
-}
-
-function initialStages(): Record<PipelineStageId, StageState> {
-  return Object.fromEntries(
-    PIPELINE_STAGES.map((s) => [s.id, { status: "pending" as StageStatus }])
-  ) as Record<PipelineStageId, StageState>;
+/** The pipeline_runs row shape the client needs (see lib/pipeline/runs.ts). */
+interface RunDTO {
+  id: string;
+  niche: string;
+  status: "running" | "completed" | "failed" | "awaiting_approval";
+  stages: PipelineEvent[];
+  error: string | null;
 }
 
 const STATUS_STYLE: Record<StageStatus, { dot: string; text: string; label: string }> = {
@@ -29,53 +27,96 @@ const STATUS_STYLE: Record<StageStatus, { dot: string; text: string; label: stri
   failed: { dot: "bg-red-500", text: "text-red-300", label: "failed" },
 };
 
+const POLL_MS = 3000;
+
 export function PipelineRunner() {
   const router = useRouter();
   const [niche, setNiche] = useState("tech");
-  const [running, setRunning] = useState(false);
-  const [stages, setStages] = useState<Record<PipelineStageId, StageState>>(initialStages);
+  const [run, setRun] = useState<RunDTO | null>(null);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  function finish() {
-    esRef.current?.close();
-    esRef.current = null;
-    setRunning(false);
-    router.refresh(); // pull the new video into the kanban below
-  }
+  const isRunning = run?.status === "running";
 
-  function start() {
-    if (running) return;
-    setStages(initialStages());
-    setError(null);
-    setRunning(true);
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
 
-    const es = new EventSource(`/api/pipeline/stream?niche=${encodeURIComponent(niche)}`);
-    esRef.current = es;
+  const fetchRun = useCallback(async (id?: string): Promise<RunDTO | null> => {
+    const url = id ? `/api/pipeline/runs?id=${encodeURIComponent(id)}` : "/api/pipeline/runs";
+    const res = await fetch(url, { cache: "no-store" });
+    const json = await res.json();
+    return (json?.run ?? null) as RunDTO | null;
+  }, []);
 
-    es.onmessage = (e) => {
-      let msg: ({ type?: string } & Partial<PipelineEvent>) | null = null;
+  const startPolling = useCallback(
+    (id: string) => {
+      stopPolling();
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await fetchRun(id);
+          if (!r) return;
+          setRun(r);
+          if (r.status !== "running") {
+            stopPolling();
+            router.refresh(); // surface the new video in the kanban below
+          }
+        } catch {
+          /* transient network blip — keep polling */
+        }
+      }, POLL_MS);
+    },
+    [fetchRun, router, stopPolling]
+  );
+
+  // On mount (incl. every reload): rehydrate the latest run from the DB and, if it's
+  // still running, resume polling. This is what makes a run survive a page reload.
+  useEffect(() => {
+    let active = true;
+    (async () => {
       try {
-        msg = JSON.parse(e.data);
+        const r = await fetchRun();
+        if (!active || !r) return;
+        setRun(r);
+        setNiche(r.niche);
+        if (r.status === "running") startPolling(r.id);
       } catch {
-        return;
+        /* ignore — Start is still available */
       }
-      if (!msg) return;
-      if (msg.type === "end") {
-        finish();
-        return;
-      }
-      if (msg.stage && msg.status) {
-        const ev = msg as PipelineEvent;
-        setStages((prev) => ({ ...prev, [ev.stage]: { status: ev.status, detail: ev.detail } }));
-      }
+    })();
+    return () => {
+      active = false;
+      stopPolling();
     };
+  }, [fetchRun, startPolling, stopPolling]);
 
-    es.onerror = () => {
-      setError("Stream interrupted — is the dev server running?");
-      finish();
-    };
+  async function start() {
+    if (isRunning || starting) return;
+    setStarting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/pipeline/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ niche }),
+      });
+      const json = await res.json();
+      if (!json?.success) throw new Error(json?.error ?? "Failed to start pipeline");
+      setRun((json.run ?? null) as RunDTO | null);
+      startPolling(json.runId as string);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to start pipeline");
+    } finally {
+      setStarting(false);
+    }
   }
+
+  const stages = reduceStageViews(run?.stages);
+  const busy = isRunning || starting;
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 mb-6">
@@ -87,10 +128,13 @@ export function PipelineRunner() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {isRunning && (
+            <span className="text-[10px] text-emerald-400/80 mr-1">● live — safe to reload</span>
+          )}
           <select
             value={niche}
             onChange={(e) => setNiche(e.target.value)}
-            disabled={running}
+            disabled={busy}
             className="text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-zinc-300 disabled:opacity-50"
           >
             <option value="tech">Tech</option>
@@ -98,10 +142,10 @@ export function PipelineRunner() {
           </select>
           <button
             onClick={start}
-            disabled={running}
+            disabled={busy}
             className="px-4 py-1.5 rounded-lg text-xs font-medium border bg-orange-500/15 text-orange-300 border-orange-500/30 hover:bg-orange-500/25 disabled:opacity-50 transition-colors"
           >
-            {running ? "Running…" : "▶ Start Pipeline"}
+            {isRunning ? "Running…" : starting ? "Starting…" : "▶ Start Pipeline"}
           </button>
         </div>
       </div>
@@ -119,9 +163,7 @@ export function PipelineRunner() {
                     {stage.label}
                   </span>
                   <span className="text-[10px] text-zinc-600">{stage.hint}</span>
-                  {style.label && (
-                    <span className={`text-[10px] ${style.text}`}>· {style.label}</span>
-                  )}
+                  {style.label && <span className={`text-[10px] ${style.text}`}>· {style.label}</span>}
                 </div>
                 {st.detail && <div className={`text-[11px] mt-0.5 ${style.text}`}>{st.detail}</div>}
               </div>
@@ -130,7 +172,9 @@ export function PipelineRunner() {
         })}
       </ol>
 
-      {error && <div className="mt-3 text-[11px] text-red-400">{error}</div>}
+      {(error || (run?.status === "failed" && run.error)) && (
+        <div className="mt-3 text-[11px] text-red-400">{error ?? run?.error}</div>
+      )}
     </div>
   );
 }

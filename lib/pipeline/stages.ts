@@ -37,6 +37,30 @@ export const PIPELINE_STAGES: { id: PipelineStageId; label: string; hint: string
   { id: "publisher", label: "Publisher", hint: "Schedule & approval" },
 ];
 
+/** A stage's current view in the tracker — derived by replaying a run's events. */
+export interface StageView {
+  status: StageStatus;
+  detail?: string;
+}
+
+/**
+ * Pure: collapse a run's ordered event log into the current per-stage view. Every
+ * stage starts "pending"; each event overwrites its stage (so running→done→… lands
+ * on the latest). Used by the client to render a rehydrated run identically to a live
+ * one — the UI never holds run state itself, it just replays what the DB persisted.
+ */
+export function reduceStageViews(
+  events: Pick<PipelineEvent, "stage" | "status" | "detail">[] | undefined
+): Record<PipelineStageId, StageView> {
+  const map = Object.fromEntries(
+    PIPELINE_STAGES.map((s) => [s.id, { status: "pending" as StageStatus }])
+  ) as Record<PipelineStageId, StageView>;
+  for (const ev of events ?? []) {
+    if (ev.stage in map) map[ev.stage] = { status: ev.status, detail: ev.detail };
+  }
+  return map;
+}
+
 export interface ScoredTopicLike {
   topic: string;
   score?: number;
