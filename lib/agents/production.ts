@@ -2,6 +2,7 @@ import { BaseAgent, type AgentInput } from "./base";
 import { refineTopicUntilPass, summariseAttempts } from "@/lib/quality-gate/refine";
 import { parseJsonResponse } from "@/lib/anthropic";
 import { ensureTtsNarration } from "./script-utils";
+import { checkScriptLength, lengthRevisionNote } from "./script-length";
 import { buildDistributionPlan, buildShortNarration, shouldCrossPromote } from "./distribution";
 import type { VideoScript } from "@/lib/db/schema";
 
@@ -56,11 +57,22 @@ Output VALID JSON only — no markdown, no commentary. Match this exact shape:
   }
 }
 
+LENGTH & STRUCTURE — non-negotiable targets (the package is rejected and regenerated if missed):
+- LONG-FORM total spoken narration (hook + all section narration + cta) = 900–1200 words → 6–8 minutes at ~150 wpm.
+  Distribute as ~5–8 sections. Do NOT pad to fill time and do NOT overshoot — every word earns its place.
+- SHORT (short_cut.narration) = 75–100 words → 30–40 seconds. A self-contained payoff, not a trailer.
+- EVERY video (long AND short) must be built as three parts:
+    (1) HOOK — a tension/stake/open loop in the first 5s,
+    (2) CONTENT — escalating payoff that delivers on the hook,
+    (3) ENDING — a distinct, retention-driving close that lands the payoff and earns the follow (NOT a flat "subscribe").
+
 CRAFT RULES — this is what separates a retained viewer from a swipe:
 - HOOK: open a loop the brain needs closed. State a stake, a number, a contradiction, or a "you're doing X wrong".
   Banned openers: "In this video", "Today we're going to", "Let's talk about", "Have you ever".
 - RETENTION: every section must escalate or pay off the hook's loop; re-hook every ~30s with a new micro-question.
   No filler ("as you can see", "without further ado"). Cut any sentence that doesn't add information or momentum.
+- ENDING: the cta (long-form) and short_cut.cta (short) ARE the ending beat — make them a satisfying button that
+  rewards finishing and gives a concrete reason to follow, not a generic sign-off.
 - VOICE: write in the channel's brand voice. Second person ("you") for tech/how-to; third person for history/analysis.
   A blind reader must be able to tell this channel's script from generic narration.
 - NARRATION is literally what the TTS speaks: expand symbols/numbers to spoken form, no headings, no "[pause]" markers
@@ -129,13 +141,29 @@ Originality notes: ${gate.dimensions.reasoning}
 
 Produce both the long-form script and the 9:16 short_cut. Output valid JSON only.`;
 
-    // The full package (long-form + short cut + voice/visual/thumbnail prompts) is
-    // large. generateText streams, so this is safe up to the model cap (Sonnet 64K);
-    // 32K gives ample headroom for longer scripts. It's a ceiling — we're billed
-    // only for tokens actually generated, so the larger budget costs nothing extra.
-    const script = ensureTtsNarration(
+    // Generate the package, validating LENGTH + STRUCTURE (6–8 min long-form, 30–40s
+    // short, hook + content + ending). The model tends to overshoot, so a failing draft
+    // is re-generated once with the concrete word-count miss fed back. generateText
+    // streams (safe to the model cap); 32K is a ceiling, billed only on real output.
+    let script = ensureTtsNarration(
       parseJsonResponse<VideoScript>(await this.callClaude(prompt, { maxTokens: 32000 }))
     );
+    let lengthCheck = checkScriptLength(script);
+    if (!lengthCheck.ok) {
+      const revised = ensureTtsNarration(
+        parseJsonResponse<VideoScript>(
+          await this.callClaude(`${prompt}\n\nREVISION REQUIRED: ${lengthRevisionNote(lengthCheck)}`, {
+            maxTokens: 32000,
+          })
+        )
+      );
+      // Keep the revision only if it's actually closer to spec; otherwise keep the first.
+      const revisedCheck = checkScriptLength(revised);
+      if (revisedCheck.ok || revisedCheck.issues.length < lengthCheck.issues.length) {
+        script = revised;
+        lengthCheck = revisedCheck;
+      }
+    }
 
     // ── Step 4: Resolve the 1-in-5 cross-promo for this channel's short ────────
     // Over-promoting the long-form on every short suppresses reach; only every
@@ -197,6 +225,15 @@ Produce both the long-form script and the 9:16 short_cut. Output valid JSON only
         score: gate.score,
         passed: gate.passed,
         flags: gate.flags,
+      },
+      // Length/structure outcome — long ≈6–8 min, short ≈30–40s (see script-length).
+      length: {
+        long_words: lengthCheck.longWords,
+        short_words: lengthCheck.shortWords,
+        est_long_secs: lengthCheck.estLongSecs,
+        est_short_secs: lengthCheck.estShortSecs,
+        on_target: lengthCheck.ok,
+        ...(lengthCheck.issues.length > 0 ? { issues: lengthCheck.issues } : {}),
       },
       ...(short.error ? { short_warning: short.error } : {}),
     };

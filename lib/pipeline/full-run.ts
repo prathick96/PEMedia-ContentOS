@@ -147,19 +147,25 @@ export async function* runFullPipeline(opts: FullRunOptions = {}): AsyncGenerato
     return;
   }
   const quality = prod.data?.quality as { score?: number } | undefined;
+  const length = prod.data?.length as { est_long_secs?: number; est_short_secs?: number } | undefined;
   const reframed = prod.data?.reframed === true;
   const finalTopic = prod.data?.topic as string | undefined;
   const attempts = prod.data?.refine_attempts as number | undefined;
   const gateNote = quality?.score != null ? ` (gate ${quality.score}/100)` : "";
+  const lenNote =
+    length?.est_long_secs != null
+      ? ` · ~${Math.round(length.est_long_secs / 60)}m long + ~${length.est_short_secs ?? "?"}s short`
+      : "";
   const detail =
     reframed && finalTopic
-      ? `Reframed after ${attempts ?? "?"} tries → "${finalTopic}"${gateNote}`
-      : `Script ready${gateNote}`;
+      ? `Reframed after ${attempts ?? "?"} tries → "${finalTopic}"${gateNote}${lenNote}`
+      : `Script ready${gateNote}${lenNote}`;
   yield ev("production", "done", detail, {
     video_id: videoId,
     topic: finalTopic,
     reframed,
     refine_attempts: attempts,
+    length,
   });
 
   // ── 5. Render — non-fatal (QA reviews the script even if media isn't set up) ─
