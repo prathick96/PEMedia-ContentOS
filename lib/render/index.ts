@@ -9,10 +9,10 @@
  */
 
 import { mkdir, writeFile } from "fs/promises";
-import { tmpdir } from "os";
 import { join } from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortCut, VideoScript } from "@/lib/db/schema";
+import { resolveRenderDir } from "./output-dir";
 import { buildRenderPlan, buildShortRenderPlan } from "./plan";
 import { computeSceneDurations } from "./plan";
 import { buildSrt, mergeTimedChunks, wordsToSrt, type TimedWord } from "./captions";
@@ -35,9 +35,11 @@ import { generateThumbnail } from "./thumbnail";
 import type { Aspect, RenderOptions, RenderPlan, RenderResult } from "./types";
 
 async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<RenderResult> {
-  const dir = opts.outputDir || join(tmpdir(), "pemedia-render");
-  await mkdir(dir, { recursive: true });
   const stamp = Date.now();
+  // Stable, configurable output dir (CONTENT_OUTPUT_DIR) — not OS temp, so finished
+  // videos persist. Per-render subdir isolates artifacts; the final path goes to the DB.
+  const dir = opts.outputDir || resolveRenderDir(stamp);
+  await mkdir(dir, { recursive: true });
   const audioPath = join(dir, `narration-${stamp}.mp3`);
   const srtPath = join(dir, `captions-${stamp}.srt`);
   const outputPath = join(dir, `video-${stamp}.mp4`);

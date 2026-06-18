@@ -10,9 +10,9 @@
  */
 
 import { mkdir, writeFile } from "fs/promises";
-import { tmpdir } from "os";
 import { join } from "path";
 import type { ThumbnailConcept } from "@/lib/db/schema";
+import { resolveRenderDir } from "./output-dir";
 import { normalizeColor } from "./plan";
 import { secondsToSrtTime } from "./captions";
 import { runFfmpeg, subtitlesFilterName } from "./ffmpeg";
@@ -65,9 +65,9 @@ export async function generateThumbnail(
   const text = buildThumbnailText(concept, fallbackText);
   if (!text) throw new Error("Cannot generate thumbnail: no text available.");
 
-  const dir = opts.outputDir || join(tmpdir(), "pemedia-render");
-  await mkdir(dir, { recursive: true });
   const stamp = Date.now();
+  const dir = opts.outputDir || resolveRenderDir(stamp);
+  await mkdir(dir, { recursive: true });
   const srtPath = join(dir, `thumb-${stamp}.srt`);
   const outputPath = join(dir, `thumb-${stamp}.png`);
 

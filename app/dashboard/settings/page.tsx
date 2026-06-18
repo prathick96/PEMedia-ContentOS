@@ -26,6 +26,7 @@ const API_KEYS: KeyMeta[] = [
   { key: "GOOGLE_CLIENT_SECRET", label: "Google OAuth Client Secret", phase: 2, critical: false, url: "console.cloud.google.com" },
   { key: "ELEVENLABS_API_KEY", label: "ElevenLabs (Voice)", phase: 2, critical: false, url: "elevenlabs.io" },
   { key: "ELEVENLABS_VOICE_ID", label: "ElevenLabs Voice ID (render)", phase: 2, critical: false, url: "elevenlabs.io → Voices" },
+  { key: "CONTENT_OUTPUT_DIR", label: "Video output dir (default ~/ContentOS/output)", phase: 2, critical: false, url: "absolute path / drive" },
   { key: "PEXELS_API_KEY", label: "Pexels (Free Stock)", phase: 2, critical: false, url: "pexels.com/api" },
   { key: "SERPAPI_API_KEY", label: "SerpAPI (optional trends)", phase: 2, critical: false, url: "serpapi.com" },
   { key: "MUAPI_API_KEY", label: "Muapi.ai (Video Gen)", phase: 3, critical: false, url: "muapi.ai — add when funded" },
