@@ -7,6 +7,7 @@ import {
   buildConcatListContent,
   buildImageClipArgs,
   buildKenBurnsClipArgs,
+  buildMusicMixArgs,
   buildRenderArgs,
   buildSubtitlesFilter,
   buildVideoClipArgs,
@@ -132,6 +133,25 @@ describe("buildColorClipArgs", () => {
     expect(args[args.indexOf("-t") + 1]).toBe("3.000");
     expect(args).toContain("-an");
     expect(args[args.length - 1]).toBe("/t/clip.mp4");
+  });
+});
+
+describe("buildMusicMixArgs", () => {
+  const args = buildMusicMixArgs({
+    videoPath: "/t/in.mp4",
+    musicPath: "/t/bed.mp3",
+    outputPath: "/t/out.mp4",
+    volume: 0.1,
+  });
+  it("mixes a looped, lowered music bed under narration, copying video", () => {
+    expect(args[args.indexOf("-stream_loop") + 1]).toBe("-1");
+    const fc = args[args.indexOf("-filter_complex") + 1];
+    expect(fc).toContain("volume=0.1");
+    expect(fc).toContain("amix=inputs=2");
+    expect(fc).toContain("normalize=0"); // narration stays at full volume
+    expect(args[args.indexOf("-c:v") + 1]).toBe("copy");
+    expect(args).toContain("-shortest");
+    expect(args[args.length - 1]).toBe("/t/out.mp4");
   });
 });
 

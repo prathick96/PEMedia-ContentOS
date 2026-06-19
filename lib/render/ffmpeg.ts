@@ -188,6 +188,38 @@ export function buildConcatListContent(clipPaths: string[]): string {
   return clipPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n";
 }
 
+export interface MusicMixInput {
+  videoPath: string;
+  musicPath: string;
+  outputPath: string;
+  /** Music volume relative to narration (0–1). */
+  volume?: number;
+}
+
+/**
+ * Pure: mix a looped music bed UNDER a finished video's narration. A second pass that
+ * copies the video stream (-c:v copy → fast, lossless) and only re-encodes audio:
+ * music is faded in and lowered, then amix'd with the narration (normalize=0 keeps the
+ * narration at full volume), bounded to the narration length.
+ */
+export function buildMusicMixArgs({ videoPath, musicPath, outputPath, volume = 0.12 }: MusicMixInput): string[] {
+  return [
+    "-y",
+    "-i", videoPath,
+    "-stream_loop", "-1",
+    "-i", musicPath,
+    "-filter_complex",
+    `[1:a]volume=${volume},afade=t=in:st=0:d=2[mus];[0:a][mus]amix=inputs=2:duration=first:normalize=0[aout]`,
+    "-map", "0:v",
+    "-map", "[aout]",
+    "-c:v", "copy",
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-shortest",
+    outputPath,
+  ];
+}
+
 export interface AudioConcatInput {
   concatListPath: string;
   outputPath: string;

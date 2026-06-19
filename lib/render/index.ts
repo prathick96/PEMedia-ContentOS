@@ -22,11 +22,13 @@ import {
   buildColorClipArgs,
   buildConcatListContent,
   buildKenBurnsClipArgs,
+  buildMusicMixArgs,
   buildRenderArgs,
   buildVideoClipArgs,
   probeDurationSecs,
   runFfmpeg,
 } from "./ffmpeg";
+import { MUSIC_BED_VOLUME, pickMusicTrack } from "./music";
 import {
   buildPexelsQuery,
   downloadToFile,
@@ -114,8 +116,27 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
     await runFfmpeg(buildRenderArgs({ audioPath, srtPath, plan, outputPath }), { cwd: dir });
   }
 
+  // Optional music bed: mix a royalty-free track (CONTENT_MUSIC_DIR) low under the
+  // narration in a fast video-copy pass. No library / no track → silently skip.
+  let finalVideoPath = outputPath;
+  try {
+    const track = await pickMusicTrack();
+    if (track) {
+      const mixedPath = join(dir, `video-${stamp}-music.mp4`);
+      await runFfmpeg(
+        buildMusicMixArgs({ videoPath: outputPath, musicPath: track, outputPath: mixedPath, volume: MUSIC_BED_VOLUME })
+      );
+      finalVideoPath = mixedPath;
+    }
+  } catch (err) {
+    console.warn(
+      "[render] music bed failed, using narration-only audio:",
+      err instanceof Error ? err.message : err
+    );
+  }
+
   return {
-    videoPath: outputPath,
+    videoPath: finalVideoPath,
     durationSecs,
     width: plan.width,
     height: plan.height,
