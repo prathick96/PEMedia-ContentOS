@@ -19,13 +19,23 @@ import { buildSrt, mergeTimedChunks, wordsToSrt, type TimedWord } from "./captio
 import {
   buildAudioConcatArgs,
   buildBrollFinalArgs,
+  buildColorClipArgs,
   buildConcatListContent,
-  buildImageClipArgs,
+  buildKenBurnsClipArgs,
   buildRenderArgs,
+  buildVideoClipArgs,
   probeDurationSecs,
   runFfmpeg,
 } from "./ffmpeg";
-import { buildPexelsQuery, downloadToFile, fetchScenePhotos, photoUrl, pickBestPhoto } from "./visuals";
+import {
+  buildPexelsQuery,
+  downloadToFile,
+  fetchScenePhotos,
+  fetchSceneVideos,
+  photoUrl,
+  pickBestPhoto,
+  pickBestVideoFile,
+} from "./visuals";
 import {
   synthesizeNarrationChunks,
   synthesizeNarrationTimedChunks,
@@ -82,10 +92,13 @@ async function renderTimeline(plan: RenderPlan, opts: RenderOptions): Promise<Re
   const srt = words.length > 0 ? wordsToSrt(words) : buildSrt(plan.scenes, durationSecs);
   await writeFile(srtPath, srt, "utf8");
 
-  // Visuals: opt-in Pexels b-roll, else the default brand-color background. Any
-  // failure in the b-roll path degrades cleanly to the color render.
+  // Visuals: real stock b-roll is now the DEFAULT whenever a Pexels key is present
+  // (each scene → stock video → still+Ken Burns → color card, all per-scene resilient).
+  // Pass visualSource: "color" to force the flat brand card; any whole-path failure
+  // also degrades cleanly to it.
+  const useBroll = opts.visualSource !== "color" && Boolean(process.env.PEXELS_API_KEY);
   let assembled = false;
-  if (opts.visualSource === "pexels") {
+  if (useBroll) {
     try {
       await renderBrollVideo({ plan, durationSecs, audioPath, srtPath, outputPath, dir, stamp });
       assembled = true;
@@ -142,7 +155,11 @@ async function writeNarrationAudio(
   return chunkPaths;
 }
 
-/** Assemble the video from per-scene Pexels stills timed to the narration. */
+/**
+ * Assemble the video from per-scene visuals timed to the narration. Each scene tries,
+ * in order: a Pexels stock VIDEO clip → a still photo with Ken Burns motion → a solid
+ * color card. Every step is isolated, so a scene with no stock never aborts the run.
+ */
 async function renderBrollVideo(args: {
   plan: RenderPlan;
   durationSecs: number;
@@ -158,32 +175,96 @@ async function renderBrollVideo(args: {
 
   const clipPaths: string[] = [];
   for (let i = 0; i < plan.scenes.length; i++) {
-    const scene = plan.scenes[i];
-    const query = buildPexelsQuery(scene.text, scene.keywords);
-    const photos = await fetchScenePhotos(query, aspect);
-    const photo = pickBestPhoto(photos, aspect);
-    if (!photo) throw new Error(`No Pexels photo found for "${query}"`);
-
-    const imagePath = join(dir, `img-${stamp}-${i}.jpg`);
-    await downloadToFile(photoUrl(photo), imagePath);
-
-    const clipPath = join(dir, `clip-${stamp}-${i}.mp4`);
-    await runFfmpeg(
-      buildImageClipArgs({
-        imagePath,
-        outputPath: clipPath,
+    clipPaths.push(
+      await renderSceneClip({
+        query: buildPexelsQuery(plan.scenes[i].text, plan.scenes[i].keywords),
+        aspect,
         durationSecs: durations[i],
+        clipPath: join(dir, `clip-${stamp}-${i}.mp4`),
+        srcBase: join(dir, `src-${stamp}-${i}`),
         width: plan.width,
         height: plan.height,
+        backgroundColor: plan.backgroundColor,
       })
     );
-    clipPaths.push(clipPath);
   }
 
   const concatListPath = join(dir, `concat-${stamp}.txt`);
   await writeFile(concatListPath, buildConcatListContent(clipPaths), "utf8");
   // cwd = dir so the subtitles filter resolves the SRT by bare filename.
   await runFfmpeg(buildBrollFinalArgs({ concatListPath, audioPath, srtPath, outputPath }), { cwd: dir });
+}
+
+/**
+ * Produce one scene clip, degrading per-scene: Pexels stock VIDEO → still photo with
+ * Ken Burns motion → solid color card. Never throws — a scene always yields a clip.
+ */
+async function renderSceneClip(s: {
+  query: string;
+  aspect: Aspect;
+  durationSecs: number;
+  clipPath: string;
+  srcBase: string;
+  width: number;
+  height: number;
+  backgroundColor: string;
+}): Promise<string> {
+  const warn = (what: string, err: unknown) =>
+    console.warn(`[render] ${what} for "${s.query}":`, err instanceof Error ? err.message : err);
+
+  // 1. Stock video — real motion, the best free option.
+  try {
+    const pick = pickBestVideoFile(await fetchSceneVideos(s.query, s.aspect), s.aspect);
+    if (pick) {
+      const srcPath = `${s.srcBase}.mp4`;
+      await downloadToFile(pick.url, srcPath);
+      await runFfmpeg(
+        buildVideoClipArgs({
+          videoPath: srcPath,
+          outputPath: s.clipPath,
+          durationSecs: s.durationSecs,
+          width: s.width,
+          height: s.height,
+        })
+      );
+      return s.clipPath;
+    }
+  } catch (err) {
+    warn("stock video failed", err);
+  }
+
+  // 2. Still photo with Ken Burns motion.
+  try {
+    const photo = pickBestPhoto(await fetchScenePhotos(s.query, s.aspect), s.aspect);
+    if (photo) {
+      const imgPath = `${s.srcBase}.jpg`;
+      await downloadToFile(photoUrl(photo), imgPath);
+      await runFfmpeg(
+        buildKenBurnsClipArgs({
+          imagePath: imgPath,
+          outputPath: s.clipPath,
+          durationSecs: s.durationSecs,
+          width: s.width,
+          height: s.height,
+        })
+      );
+      return s.clipPath;
+    }
+  } catch (err) {
+    warn("still photo failed", err);
+  }
+
+  // 3. Solid color card — guaranteed last resort so the video always assembles.
+  await runFfmpeg(
+    buildColorClipArgs({
+      outputPath: s.clipPath,
+      durationSecs: s.durationSecs,
+      width: s.width,
+      height: s.height,
+      backgroundColor: s.backgroundColor,
+    })
+  );
+  return s.clipPath;
 }
 
 function withVoiceSettings(opts: RenderOptions, script: VideoScript): RenderOptions {

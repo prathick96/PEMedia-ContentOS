@@ -104,6 +104,85 @@ export function buildImageClipArgs(input: ImageClipInput): string[] {
   ];
 }
 
+/**
+ * Pure: ffmpeg argv for a "Ken Burns" clip — a still slowly zoomed/panned so it's
+ * never frozen on screen. The source is upscaled 2x first so zoompan has headroom to
+ * stay sharp; the zoom drifts to ~1.2x over the clip, centered.
+ */
+export function buildKenBurnsClipArgs(input: ImageClipInput): string[] {
+  const frames = Math.max(1, Math.round(input.durationSecs * RENDER_FPS));
+  const filter =
+    `scale=${input.width * 2}:${input.height * 2}:force_original_aspect_ratio=increase,` +
+    `crop=${input.width * 2}:${input.height * 2},` +
+    `zoompan=z='min(zoom+0.0009,1.2)':d=${frames}:s=${input.width}x${input.height}:fps=${RENDER_FPS}` +
+    `:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)',format=yuv420p`;
+  return [
+    "-y",
+    "-loop", "1",
+    "-i", input.imagePath,
+    "-t", input.durationSecs.toFixed(3),
+    "-vf", filter,
+    "-c:v", "libx264",
+    "-preset", X264_PRESET,
+    "-pix_fmt", "yuv420p",
+    "-an",
+    input.outputPath,
+  ];
+}
+
+export interface VideoClipInput {
+  videoPath: string;
+  outputPath: string;
+  durationSecs: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Pure: normalize a stock video into a WxH scene clip of an exact duration. The
+ * source is looped if shorter (-stream_loop) and trimmed to length, scaled/cropped
+ * to fill, fps-normalized, and stripped of its own audio (we use our narration).
+ */
+export function buildVideoClipArgs(input: VideoClipInput): string[] {
+  return [
+    "-y",
+    "-stream_loop", "-1",
+    "-i", input.videoPath,
+    "-t", input.durationSecs.toFixed(3),
+    "-an",
+    "-vf",
+    `scale=${input.width}:${input.height}:force_original_aspect_ratio=increase,crop=${input.width}:${input.height},fps=${RENDER_FPS},format=yuv420p`,
+    "-c:v", "libx264",
+    "-preset", X264_PRESET,
+    "-pix_fmt", "yuv420p",
+    input.outputPath,
+  ];
+}
+
+export interface ColorClipInput {
+  outputPath: string;
+  durationSecs: number;
+  width: number;
+  height: number;
+  backgroundColor: string;
+}
+
+/** Pure: a solid brand-color scene clip — the per-scene fallback when no stock fits. */
+export function buildColorClipArgs(input: ColorClipInput): string[] {
+  return [
+    "-y",
+    "-f", "lavfi",
+    "-i", `color=c=${input.backgroundColor}:s=${input.width}x${input.height}:r=${RENDER_FPS}`,
+    "-t", input.durationSecs.toFixed(3),
+    "-c:v", "libx264",
+    "-preset", X264_PRESET,
+    "-tune", "stillimage",
+    "-pix_fmt", "yuv420p",
+    "-an",
+    input.outputPath,
+  ];
+}
+
 /** Pure: a concat-demuxer list file body for the given clip paths. */
 export function buildConcatListContent(clipPaths: string[]): string {
   return clipPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n";

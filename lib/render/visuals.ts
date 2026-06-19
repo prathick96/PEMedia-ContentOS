@@ -28,6 +28,69 @@ export function buildPexelsQuery(text: string, keywords?: string[]): string {
     .join(" ");
 }
 
+/** A single downloadable video rendition from Pexels. */
+export interface PexelsVideoFile {
+  id: number;
+  quality: string;
+  file_type: string;
+  width: number;
+  height: number;
+  link: string;
+}
+
+export interface PexelsVideo {
+  id: number;
+  width: number;
+  height: number;
+  duration: number;
+  video_files: PexelsVideoFile[];
+}
+
+/**
+ * Pure: choose the best mp4 rendition for the target aspect — the smallest file at
+ * or above `targetWidth` (keeps downloads light) of an orientation-matching clip,
+ * relaxing orientation only if nothing matches. Returns null when there's no mp4.
+ */
+export function pickBestVideoFile(
+  videos: PexelsVideo[],
+  aspect: Aspect,
+  targetWidth = 1280
+): { url: string } | null {
+  const wantLandscape = aspect === "16:9";
+  const collect = (orientedOnly: boolean): PexelsVideoFile[] => {
+    const out: PexelsVideoFile[] = [];
+    for (const v of videos) {
+      const oriented = wantLandscape ? v.width >= v.height : v.height > v.width;
+      if (orientedOnly && !oriented) continue;
+      for (const f of v.video_files) {
+        if (f.file_type === "video/mp4" && f.link) out.push(f);
+      }
+    }
+    return out;
+  };
+
+  const candidates = collect(true).length > 0 ? collect(true) : collect(false);
+  if (candidates.length === 0) return null;
+
+  const sorted = [...candidates].sort((a, b) => a.width - b.width);
+  const best = sorted.find((f) => f.width >= targetWidth) ?? sorted[sorted.length - 1];
+  return { url: best.link };
+}
+
+/** Search Pexels for stock VIDEO matching a query, biased to the target aspect. */
+export async function fetchSceneVideos(
+  query: string,
+  aspect: Aspect,
+  perPage = 5
+): Promise<PexelsVideo[]> {
+  const orientation = aspect === "16:9" ? "landscape" : "portrait";
+  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=${orientation}`;
+  const res = await fetch(url, { headers: { Authorization: pexelsKey() } });
+  if (!res.ok) throw new Error(`Pexels video search failed (${res.status}): ${await res.text()}`);
+  const json = (await res.json()) as { videos?: PexelsVideo[] };
+  return json.videos ?? [];
+}
+
 /** Pure: pick the photo whose orientation best fits the target aspect. */
 export function pickBestPhoto(photos: PexelsPhoto[], aspect: Aspect): PexelsPhoto | null {
   const usable = photos.filter((p) => Boolean(photoUrl(p)));
